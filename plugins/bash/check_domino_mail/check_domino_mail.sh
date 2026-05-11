@@ -496,4 +496,4 @@ esac
 echo "${PLUGIN_NAME} ${LABEL} - ${SUMMARY[*]} | ${PERFDATA[*]}"
 for d in "${DETAILS[@]}"; do echo "$d"; done
 
-exit $STATUS
+exit "${STATUS}"
