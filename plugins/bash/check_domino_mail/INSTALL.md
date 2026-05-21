@@ -55,31 +55,7 @@ icinga ALL=(ALL) NOPASSWD: /usr/bin/domino
 
 Adjust the path to match `which domino` on your system.
 
-### 3. Configure the plugin to use sudo
-
-Set `--domino-cmd "sudo domino"` when calling the plugin.
-
-**Config file deployment** — add to each Domino host object:
-
-```icinga2
-vars.check_domino_mail_domino_cmd = "sudo domino"
-```
-
-**Icinga Director** — set the variable on each Domino host object:
-
-1. Go to **Icinga Director > Hosts**
-2. Search for and click on the Domino host (e.g. `mail01.example.com`)
-3. Click the **Custom Properties** tab
-4. Scroll to the bottom and click **+ Add property**
-5. In the **Property name** field type: `check_domino_mail_domino_cmd`
-6. In the **Property value** field type: `sudo domino`
-7. Click **Add** (the row is saved inline)
-8. Click **Store** (top of the form)
-9. Click **Deploy** to activate the change
-
-Repeat steps 2–9 for every Domino host object. The change is not live until **Deploy** completes.
-
-### 4. Verify
+### 3. Verify
 
 ```bash
 # Should return 'Domino Server is running (notes)' or similar — not a password prompt
@@ -171,7 +147,6 @@ Minimum supported Director version: 1.10.0
    | `--http-expect` | `$check_domino_mail_http_expect$` | | Expected body substring |
    | `-t` | `$check_domino_mail_timeout$` | | Network probe timeout |
    | `--handshake-timeout` | `$check_domino_mail_handshake_timeout$` | | NRPC handshake timeout |
-   | `--domino-cmd` | `$check_domino_mail_domino_cmd$` | | Path to domino command |
    | `--cmd-timeout` | `$check_domino_mail_cmd_timeout$` | | domino cmd timeout |
    | `--no-status` | | `$check_domino_mail_no_status$` | Disable status sub-check |
    | `--no-nrpc-tcp` | | `$check_domino_mail_no_nrpc_tcp$` | Disable NRPC TCP sub-check |
@@ -232,9 +207,6 @@ Always trigger a **Deploy** after changes in Director. Changes are not active un
 Set these on individual host objects to override defaults:
 
 ```icinga2
-// Required on all hosts: run domino via sudo (see Prerequisites section)
-vars.check_domino_mail_domino_cmd = "sudo domino"
-
 // Override HTTP URL when no catch-all Web Site document exists in names.nsf
 vars.check_domino_mail_http_url = "http://mail01.example.com/names.nsf?OpenDatabase"
 

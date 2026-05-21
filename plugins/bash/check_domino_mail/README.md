@@ -75,7 +75,6 @@ check_domino_mail [options]
 | `--http-expect` | No | Domino | Expected substring in HTTP body |
 | `-t` | No | 10 | Per network-probe timeout in seconds |
 | `--handshake-timeout` | No | 5 | NRPC handshake timeout in seconds |
-| `--domino-cmd` | No | domino | Path to Nashcom start script |
 | `--cmd-timeout` | No | 20 | `domino cmd` timeout in seconds |
 | `--no-status` | No | | Disable `domino status` sub-check |
 | `--no-nrpc-tcp` | No | | Disable NRPC TCP-connect sub-check |
