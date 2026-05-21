@@ -28,20 +28,51 @@
 
 ## Prerequisites on the Domino Host
 
-**Nashcom start script** must be installed and the `domino` command available in the
-PATH of the Icinga agent user:
+### 1. Nashcom start script
+
+The `domino` command must be installed and locatable. Find its path:
 
 ```bash
-# Verify from the agent user's environment (adjust for your OS)
-sudo -u nagios which domino
-sudo -u nagios domino status
+which domino
+# typically: /usr/bin/domino or /opt/nashcom/domino/domino
 ```
 
-If `domino` is not in the default PATH, set `--domino-cmd /full/path/to/domino` or
-configure `vars.check_domino_mail_domino_cmd` on the host object.
+### 2. Sudoers entry (required)
 
-**No sudoers entry is needed** — the Nashcom start script manages the `notes` user
-transition internally.
+The Nashcom start script uses `su` to switch to the `notes` user internally.
+When invoked by the Icinga agent user (`nagios` on RHEL, `icinga` on Debian/Ubuntu),
+this fails with `su: Authentication failure`. A sudoers entry is required.
+
+Create `/etc/sudoers.d/icinga-domino`:
+
+```
+# RHEL / Rocky Linux
+nagios ALL=(ALL) NOPASSWD: /usr/bin/domino
+
+# Debian / Ubuntu
+icinga ALL=(ALL) NOPASSWD: /usr/bin/domino
+```
+
+Adjust the path to match `which domino` on your system.
+
+### 3. Configure the plugin to use sudo
+
+Set `--domino-cmd "sudo domino"` when calling the plugin. In Icinga, configure this
+on each host object:
+
+```icinga2
+vars.check_domino_mail_domino_cmd = "sudo domino"
+```
+
+In Icinga Director, set `check_domino_mail_domino_cmd = sudo domino` on the host object
+under **Custom Properties**.
+
+### 4. Verify
+
+```bash
+# Should return 'Domino Server is running (notes)' or similar — not a password prompt
+sudo -u nagios sudo domino status
+```
 
 ## Plugin Installation
 
@@ -189,14 +220,14 @@ Always trigger a **Deploy** after changes in Director. Changes are not active un
 Set these on individual host objects to override defaults:
 
 ```icinga2
+// Required on all hosts: run domino via sudo (see Prerequisites section)
+vars.check_domino_mail_domino_cmd = "sudo domino"
+
 // Override HTTP URL when no catch-all Web Site document exists in names.nsf
 vars.check_domino_mail_http_url = "http://mail01.example.com/names.nsf?OpenDatabase"
 
 // Disable SMTP check on a relay-only host
 vars.check_domino_mail_no_smtp = true
-
-// Custom domino command path if not in default PATH
-vars.check_domino_mail_domino_cmd = "/opt/nashcom/domino/domino"
 ```
 
 In Director, set these on the host object under **Custom Properties**.
