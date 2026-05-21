@@ -57,15 +57,27 @@ Adjust the path to match `which domino` on your system.
 
 ### 3. Configure the plugin to use sudo
 
-Set `--domino-cmd "sudo domino"` when calling the plugin. In Icinga, configure this
-on each host object:
+Set `--domino-cmd "sudo domino"` when calling the plugin.
+
+**Config file deployment** — add to each Domino host object:
 
 ```icinga2
 vars.check_domino_mail_domino_cmd = "sudo domino"
 ```
 
-In Icinga Director, set `check_domino_mail_domino_cmd = sudo domino` on the host object
-under **Custom Properties**.
+**Icinga Director** — set the variable on each Domino host object:
+
+1. Go to **Icinga Director > Hosts**
+2. Search for and click on the Domino host (e.g. `mail01.example.com`)
+3. Click the **Custom Properties** tab
+4. Scroll to the bottom and click **+ Add property**
+5. In the **Property name** field type: `check_domino_mail_domino_cmd`
+6. In the **Property value** field type: `sudo domino`
+7. Click **Add** (the row is saved inline)
+8. Click **Store** (top of the form)
+9. Click **Deploy** to activate the change
+
+Repeat steps 2–9 for every Domino host object. The change is not live until **Deploy** completes.
 
 ### 4. Verify
 
