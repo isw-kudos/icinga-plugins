@@ -39,27 +39,26 @@ which domino
 
 ### 2. Sudoers entry (required)
 
-The Nashcom start script uses `su` to switch to the `notes` user internally.
-When invoked by the Icinga agent user (`nagios` on RHEL, `icinga` on Debian/Ubuntu),
-this fails with `su: Authentication failure`. A sudoers entry is required.
+The plugin runs as the `notes` user so it can invoke the Nashcom start script
+without triggering `su: Authentication failure`. A sudoers entry is required.
 
 Create `/etc/sudoers.d/icinga-domino`:
 
 ```
 # RHEL / Rocky Linux
-nagios ALL=(ALL) NOPASSWD: /usr/bin/domino
+nagios ALL=(notes) NOPASSWD: /usr/lib/nagios/plugins/check_domino_mail
 
 # Debian / Ubuntu
-icinga ALL=(ALL) NOPASSWD: /usr/bin/domino
+icinga ALL=(notes) NOPASSWD: /usr/lib/nagios/plugins/check_domino_mail
 ```
 
-Adjust the path to match `which domino` on your system.
+Adjust the path if you installed the plugin to a different location.
 
 ### 3. Verify
 
 ```bash
-# Should return 'Domino Server is running (notes)' or similar — not a password prompt
-sudo -u nagios sudo domino status
+# Should return plugin output — not a password prompt
+sudo -u nagios sudo -u notes /usr/lib/nagios/plugins/check_domino_mail
 ```
 
 ## Plugin Installation

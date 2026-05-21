@@ -49,10 +49,9 @@ mode separately:
 - `curl` available (for the HTTP probe)
 - Icinga 2 agent on the Domino host
 
-**Sudoers entry required.** The Nashcom start script uses `su` to switch to the `notes`
-user internally. When invoked by the Icinga agent user (`nagios`/`icinga`) this fails
-with `su: Authentication failure`. Add a sudoers entry and configure the plugin to use
-`sudo` — see [INSTALL.md](INSTALL.md) for details.
+**Sudoers entry required.** The plugin runs as the `notes` user so the Nashcom start
+script can switch users without `su: Authentication failure`. See [INSTALL.md](INSTALL.md)
+for the required sudoers entry.
 
 ## Compatibility
 
