@@ -45,20 +45,28 @@ without triggering `su: Authentication failure`. A sudoers entry is required.
 Create `/etc/sudoers.d/icinga-domino`:
 
 ```
-# RHEL / Rocky Linux
-nagios ALL=(notes) NOPASSWD: /usr/lib/nagios/plugins/check_domino_mail
+# RHEL / Rocky Linux (lib64, nagios agent user)
+nagios ALL=(notes) NOPASSWD: /usr/lib64/nagios/plugins/check_domino_mail
 
-# Debian / Ubuntu
+# Debian / Ubuntu (lib, icinga agent user)
 icinga ALL=(notes) NOPASSWD: /usr/lib/nagios/plugins/check_domino_mail
 ```
 
-Adjust the path if you installed the plugin to a different location.
+The path must match exactly where the plugin is installed. Confirm with:
+
+```bash
+ls /usr/lib64/nagios/plugins/check_domino_mail   # RHEL
+ls /usr/lib/nagios/plugins/check_domino_mail      # Debian/Ubuntu
+```
 
 ### 3. Verify
 
 ```bash
-# Should return plugin output — not a password prompt
-sudo -u nagios sudo -u notes /usr/lib/nagios/plugins/check_domino_mail
+# RHEL
+sudo -u nagios sudo -u notes /usr/lib64/nagios/plugins/check_domino_mail
+
+# Debian / Ubuntu
+sudo -u icinga sudo -u notes /usr/lib/nagios/plugins/check_domino_mail
 ```
 
 ## Plugin Installation
