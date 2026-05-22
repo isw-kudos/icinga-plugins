@@ -49,9 +49,10 @@ mode separately:
 - `curl` available (for the HTTP probe)
 - Icinga 2 agent on the Domino host
 
-**Sudoers entry required.** The plugin runs as the `notes` user so the Nashcom start
-script can switch users without `su: Authentication failure`. See [INSTALL.md](INSTALL.md)
-for the required sudoers entry.
+**Sudoers entry required.** The Nashcom start script uses `su` to switch to the `notes`
+user internally. When invoked by the Icinga agent user (`nagios`/`icinga`) this fails
+with `su: Authentication failure`. Add a sudoers entry for the `domino` binary and set
+`--domino-cmd "sudo /bin/domino"` — see [INSTALL.md](INSTALL.md) for details.
 
 ## Compatibility
 
@@ -74,6 +75,7 @@ check_domino_mail [options]
 | `--http-expect` | No | Domino | Expected substring in HTTP body |
 | `-t` | No | 10 | Per network-probe timeout in seconds |
 | `--handshake-timeout` | No | 5 | NRPC handshake timeout in seconds |
+| `--domino-cmd` | No | domino | Command to invoke Nashcom start script |
 | `--cmd-timeout` | No | 20 | `domino cmd` timeout in seconds |
 | `--no-status` | No | | Disable `domino status` sub-check |
 | `--no-nrpc-tcp` | No | | Disable NRPC TCP-connect sub-check |

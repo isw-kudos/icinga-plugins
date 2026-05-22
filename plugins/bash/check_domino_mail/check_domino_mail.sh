@@ -33,6 +33,7 @@ PLUGIN_NAME="check_domino_mail"
 PLUGIN_VERSION="1.0.0"
 
 # ---------- Defaults ----------
+DOMINO_CMD="domino"
 HOST="127.0.0.1"
 NRPC_PORT=1352
 SMTP_PORT=25
@@ -74,6 +75,7 @@ Network probes:
   --handshake-timeout S  NRPC handshake timeout (default: ${HANDSHAKE_TIMEOUT})
 
 Domino start script integration:
+  --domino-cmd CMD       Command to invoke Nashcom start script (default: ${DOMINO_CMD})
   --cmd-timeout S        'domino cmd' timeout (default: ${CMD_TIMEOUT})
 
 Sub-check toggles:
@@ -100,6 +102,7 @@ while [[ $# -gt 0 ]]; do
         --http-expect) HTTP_EXPECT="$2"; shift 2 ;;
         -t) TIMEOUT="$2"; shift 2 ;;
         --handshake-timeout) HANDSHAKE_TIMEOUT="$2"; shift 2 ;;
+        --domino-cmd) DOMINO_CMD="$2"; shift 2 ;;
         --cmd-timeout) CMD_TIMEOUT="$2"; shift 2 ;;
         --no-status) CHECK_STATUS=0; shift ;;
         --no-nrpc-tcp) CHECK_NRPC_TCP=0; shift ;;
@@ -113,6 +116,9 @@ while [[ $# -gt 0 ]]; do
         *) echo "${PLUGIN_NAME} UNKNOWN - Unrecognized option: $1"; exit "${STATE_UNKNOWN}" ;;
     esac
 done
+
+# Split DOMINO_CMD into an array so "sudo /bin/domino" expands correctly
+read -ra DOMINO_CMD_ARR <<< "$DOMINO_CMD"
 
 escalate() {
     local lvl=$1
@@ -140,7 +146,7 @@ run_domino_cmd() {
     local cmd=$1 lines=${2:-50} out
     DOMINO_RC=0
     out=$(timeout --kill-after=2 "$CMD_TIMEOUT" \
-            domino cmd "$cmd" "$lines" 2>&1) || DOMINO_RC=$?
+            "${DOMINO_CMD_ARR[@]}" cmd "$cmd" "$lines" 2>&1) || DOMINO_RC=$?
     printf '%s' "$out"
 }
 
@@ -165,7 +171,7 @@ extract_cmd_output() {
 check_status() {
     local start end elapsed out rc=0
     start=$(now_ms)
-    out=$(timeout --kill-after=2 10 domino status 2>&1) || rc=$?
+    out=$(timeout --kill-after=2 10 "${DOMINO_CMD_ARR[@]}" status 2>&1) || rc=$?
     end=$(now_ms); elapsed=$((end - start))
 
     if [[ $rc -eq 124 || $rc -eq 137 ]]; then
@@ -173,8 +179,8 @@ check_status() {
         PERFDATA+=("status_ms=U")
         return
     fi
-    if ! command -v domino >/dev/null 2>&1; then
-        record ${STATE_UNKNOWN} "status" "domino not found - install Nashcom start script"
+    if ! command -v "${DOMINO_CMD%% *}" >/dev/null 2>&1; then
+        record ${STATE_UNKNOWN} "status" "${DOMINO_CMD} not found - install Nashcom start script"
         PERFDATA+=("status_ms=U")
         return
     fi

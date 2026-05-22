@@ -39,34 +39,38 @@ which domino
 
 ### 2. Sudoers entry (required)
 
-The plugin runs as the `notes` user so it can invoke the Nashcom start script
-without triggering `su: Authentication failure`. A sudoers entry is required.
-
-Create `/etc/sudoers.d/icinga-domino`:
+The Nashcom start script uses `su` to switch to the `notes` user internally.
+When invoked by the Icinga agent user (`nagios` on RHEL, `icinga` on Debian/Ubuntu),
+this fails with `su: Authentication failure`. Allow the agent user to call `domino`
+via `sudo` by creating `/etc/sudoers.d/icinga-domino`:
 
 ```
-# RHEL / Rocky Linux (lib64, nagios agent user)
-nagios ALL=(notes) NOPASSWD: /usr/lib64/nagios/plugins/check_domino_mail
-
-# Debian / Ubuntu (lib, icinga agent user)
-icinga ALL=(notes) NOPASSWD: /usr/lib/nagios/plugins/check_domino_mail
-```
-
-The path must match exactly where the plugin is installed. Confirm with:
-
-```bash
-ls /usr/lib64/nagios/plugins/check_domino_mail   # RHEL
-ls /usr/lib/nagios/plugins/check_domino_mail      # Debian/Ubuntu
-```
-
-### 3. Verify
-
-```bash
-# RHEL
-sudo -u nagios sudo -u notes /usr/lib64/nagios/plugins/check_domino_mail
+# RHEL / Rocky Linux
+nagios ALL=(ALL) NOPASSWD: /bin/domino
 
 # Debian / Ubuntu
-sudo -u icinga sudo -u notes /usr/lib/nagios/plugins/check_domino_mail
+icinga ALL=(ALL) NOPASSWD: /usr/bin/domino
+```
+
+Adjust the path to match `which domino` on your system.
+
+### 3. Configure the plugin to use sudo
+
+Set `--domino-cmd "sudo /bin/domino"` when calling the plugin. In Icinga, set this
+on each host object:
+
+```icinga2
+vars.check_domino_mail_domino_cmd = "sudo /bin/domino"
+```
+
+In Icinga Director, set `check_domino_mail_domino_cmd = sudo /bin/domino` on the host
+object under **Custom Properties** (see Director section for step-by-step instructions).
+
+### 4. Verify
+
+```bash
+# Should return 'Domino Server is running (notes)' — not a password prompt
+sudo -u nagios /usr/lib/nagios/plugins/check_domino_mail --domino-cmd "sudo /bin/domino"
 ```
 
 ## Plugin Installation
@@ -154,6 +158,7 @@ Minimum supported Director version: 1.10.0
    | `--http-expect` | `$check_domino_mail_http_expect$` | | Expected body substring |
    | `-t` | `$check_domino_mail_timeout$` | | Network probe timeout |
    | `--handshake-timeout` | `$check_domino_mail_handshake_timeout$` | | NRPC handshake timeout |
+   | `--domino-cmd` | `$check_domino_mail_domino_cmd$` | | Path/command for domino |
    | `--cmd-timeout` | `$check_domino_mail_cmd_timeout$` | | domino cmd timeout |
    | `--no-status` | | `$check_domino_mail_no_status$` | Disable status sub-check |
    | `--no-nrpc-tcp` | | `$check_domino_mail_no_nrpc_tcp$` | Disable NRPC TCP sub-check |
@@ -214,6 +219,9 @@ Always trigger a **Deploy** after changes in Director. Changes are not active un
 Set these on individual host objects to override defaults:
 
 ```icinga2
+// Required on all hosts: invoke domino via sudo
+vars.check_domino_mail_domino_cmd = "sudo /bin/domino"
+
 // Override HTTP URL when no catch-all Web Site document exists in names.nsf
 vars.check_domino_mail_http_url = "http://mail01.example.com/names.nsf?OpenDatabase"
 
