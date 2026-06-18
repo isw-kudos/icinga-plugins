@@ -41,6 +41,162 @@ check_k8s_nodes [--kubeconfig PATH [--context NAME]
 | -V / --version   | No       |         | Show plugin version                                        |
 | -h / --help      | No       |         | Show help                                                  |
 
+## Argument Reference
+
+The table above is a quick reference; this section explains *what each
+argument is for, when you would set it, and what a typical value looks like*.
+
+### Authentication
+
+Identical to [check_k8s_pods authentication](../check_k8s_pods/README.md#authentication):
+pick one of `--kubeconfig [--context]` or `--api-url --token [--ca-cert | --insecure]`.
+
+> **Important:** `nodes` is a cluster-scoped resource, so a namespace-scoped
+> `RoleBinding` is **not** sufficient — the ServiceAccount must be bound to a
+> `ClusterRole` that grants `list` on `nodes`. The default `view` ClusterRole
+> does NOT include `nodes`; see [INSTALL.md](INSTALL.md#kubernetes-rbac).
+
+#### `--kubeconfig PATH` — Path to a kubeconfig file
+
+```bash
+check_k8s_nodes --kubeconfig /etc/icinga2/k8s/prod.kubeconfig
+```
+
+#### `--context NAME` — Selects a non-default context within the kubeconfig
+
+```bash
+check_k8s_nodes --kubeconfig ~/.kube/config --context prod-eu
+```
+
+#### `--api-url URL` + `--token TOKEN` — Direct API auth
+
+```bash
+check_k8s_nodes \
+  --api-url https://kube-api.prod.example.com:6443 \
+  --token "$(cat /etc/icinga2/k8s/prod.token)" \
+  --ca-cert /etc/icinga2/k8s/prod-ca.crt
+```
+
+#### `--ca-cert PATH` — CA that signed the API server's serving cert
+
+Extract from the SA token Secret's `data.ca.crt`. Without `--ca-cert`, Python's
+default trust store is used (usually does NOT trust a self-signed Kubernetes CA).
+
+#### `--insecure` — Skip TLS verification
+
+**Not recommended.** Acceptable only for `kind` / `minikube` / trusted-network
+test clusters.
+
+### Scope: which nodes to evaluate
+
+#### `-l SELECTOR` / `--selector SELECTOR`
+
+Standard Kubernetes label selector applied to **nodes**. Common keys:
+
+| Selector                                  | What it matches                              |
+|-------------------------------------------|----------------------------------------------|
+| `node-role.kubernetes.io/control-plane=`  | Control-plane nodes only                     |
+| `node-role.kubernetes.io/worker=`         | Worker nodes only (if your distro sets it)   |
+| `kubernetes.io/os=linux`                  | Linux nodes                                  |
+| `topology.kubernetes.io/zone=eu-west-1a`  | Nodes in a specific availability zone        |
+| Your own label, e.g. `gpu=nvidia-a100`    | Hardware-specific pools                      |
+
+```bash
+# One Icinga service for control-plane health, another for workers
+check_k8s_nodes --kubeconfig prod.kubeconfig -l node-role.kubernetes.io/control-plane=
+check_k8s_nodes --kubeconfig prod.kubeconfig -l '!node-role.kubernetes.io/control-plane'
+```
+
+Use this to:
+- Apply different escalation policies to control-plane vs worker nodes.
+- Per-zone health checks for availability-zone aware monitoring.
+- Isolate GPU / specialized hardware pools whose failure modes differ.
+
+### Behaviour tuning
+
+#### `--ignore-cordon`
+
+Suppresses the WARNING that fires when a node has `spec.unschedulable=true`.
+
+Cordoned nodes are usually intentional (maintenance, draining before a kernel
+update, isolating a flaky node for investigation). Whether to alert depends
+on your operating model:
+
+| Scenario                                      | Recommended                  |
+|-----------------------------------------------|------------------------------|
+| Long-running production cluster, cordon == incident | Leave default (alert)  |
+| Frequent rolling kernel updates / autoscaling | `--ignore-cordon` (silence) |
+| Mixed: alert during business hours only       | Two separate services with different schedules |
+
+```bash
+# Maintenance-aware check that ignores cordon
+check_k8s_nodes --kubeconfig prod.kubeconfig --ignore-cordon
+```
+
+Note that **Ready** and pressure conditions still alert even with
+`--ignore-cordon` — only the cordoned-state WARNING is suppressed.
+
+### Execution & output
+
+#### `-t SECONDS` / `--timeout SECONDS` (default: `30`)
+
+Hard plugin timeout. Node listing is a single API call against a cluster-scoped
+resource — usually fast even on large clusters. Increase if your API server is
+slow or remote:
+
+```bash
+check_k8s_nodes --kubeconfig prod.kubeconfig -t 60
+```
+
+#### `-v` / `--verbose`
+
+Adds an `[OK]` line per healthy node. Useful for interactive runs; leave off
+in service definitions or large clusters will generate enormous Icinga event
+history entries.
+
+```bash
+check_k8s_nodes --kubeconfig prod.kubeconfig -v
+```
+
+#### `-V` / `--version`, `-h` / `--help`
+
+Standard.
+
+## Putting it together: example invocations
+
+Whole-cluster node health, default thresholds:
+
+```bash
+check_k8s_nodes --kubeconfig /etc/icinga2/k8s/prod.kubeconfig
+```
+
+Control-plane-only check, alert on any cordon:
+
+```bash
+check_k8s_nodes \
+  --kubeconfig /etc/icinga2/k8s/prod.kubeconfig \
+  -l node-role.kubernetes.io/control-plane=
+```
+
+Worker-pool check during cluster autoscaling (cordons are normal):
+
+```bash
+check_k8s_nodes \
+  --kubeconfig /etc/icinga2/k8s/prod.kubeconfig \
+  -l '!node-role.kubernetes.io/control-plane' \
+  --ignore-cordon
+```
+
+Per-zone availability check (token auth):
+
+```bash
+check_k8s_nodes \
+  --api-url https://kube-api.prod.example.com:6443 \
+  --token "$(cat /etc/icinga2/k8s/prod.token)" \
+  --ca-cert /etc/icinga2/k8s/prod-ca.crt \
+  -l topology.kubernetes.io/zone=eu-west-1a
+```
+
 ## Alert Logic
 
 | Condition                                                           | State    |

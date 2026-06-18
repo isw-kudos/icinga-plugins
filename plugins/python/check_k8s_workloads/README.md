@@ -47,6 +47,205 @@ check_k8s_workloads [--kubeconfig PATH [--context NAME]
 | -V / --version            | No       |         | Show plugin version                                           |
 | -h / --help               | No       |         | Show help                                                     |
 
+## Argument Reference
+
+The table above is a quick reference; this section explains *what each
+argument is for, when you would set it, and what a typical value looks like*.
+
+### Authentication
+
+Identical to [check_k8s_pods authentication](../check_k8s_pods/README.md#authentication):
+pick one of `--kubeconfig [--context]` or `--api-url --token [--ca-cert | --insecure]`.
+The same ServiceAccount / token / kubeconfig configured for `check_k8s_pods`
+works here without modification — `apps/v1` Deployments and StatefulSets are
+covered by the same `view` permissions or by the custom `icinga-readonly`
+ClusterRole described in [INSTALL.md](INSTALL.md#kubernetes-rbac).
+
+#### `--kubeconfig PATH` — Path to a kubeconfig file
+
+```bash
+check_k8s_workloads --kubeconfig /etc/icinga2/k8s/prod.kubeconfig
+```
+
+#### `--context NAME` — Selects a non-default context within the kubeconfig
+
+```bash
+check_k8s_workloads --kubeconfig ~/.kube/config --context prod-eu
+```
+
+#### `--api-url URL` + `--token TOKEN` — Direct API auth
+
+```bash
+check_k8s_workloads \
+  --api-url https://kube-api.prod.example.com:6443 \
+  --token "$(cat /etc/icinga2/k8s/prod.token)" \
+  --ca-cert /etc/icinga2/k8s/prod-ca.crt
+```
+
+#### `--ca-cert PATH` — CA that signed the API server's serving cert
+
+Extract from the SA token Secret's `data.ca.crt`. Without `--ca-cert`, Python's
+default trust store is used (usually does NOT trust a self-signed Kubernetes CA).
+
+#### `--insecure` — Skip TLS verification
+
+**Not recommended.** Acceptable only for `kind` / `minikube` / trusted-network
+test clusters.
+
+### Scope: which workloads to evaluate
+
+By default the plugin lists **all Deployments and StatefulSets** in **every
+namespace**. The flags below narrow that.
+
+#### `-n NAMESPACE` / `--namespace NAMESPACE` (repeatable)
+
+Restrict to specific namespaces. **Repeat the flag** once per namespace —
+comma-separated values do not work (`-n a,b` is read as one namespace
+literally named `a,b`).
+
+```bash
+# Single namespace
+check_k8s_workloads --kubeconfig prod.kubeconfig -n production
+
+# Multiple namespaces — one -n each
+check_k8s_workloads --kubeconfig prod.kubeconfig -n production -n staging -n payments
+```
+
+In **Icinga 2 config**, the CheckCommand uses `repeat_key = true`, so set the
+host var as an **array** — Icinga expands each element into its own `-n` flag:
+
+```icinga2
+vars.check_k8s_workloads_namespaces = [ "production", "staging", "payments" ]
+```
+
+In **Icinga Director**, set the matching custom field as an Array data type
+(one element per namespace).
+
+> One API list call per included namespace **per workload kind** (deployments
+> and statefulsets). With both kinds enabled, `-n a -n b -n c` is six API
+> calls total. For broad cluster coverage, `--exclude-namespace` is faster.
+
+#### `--exclude-namespace NAMESPACE` (repeatable)
+
+Skip namespaces when checking cluster-wide. **Repeat the flag** once per
+namespace (no comma-separated values). **Silently ignored when `-n` is also
+given** — the include list takes precedence and the plugin never combines
+the two (there is no "all except X within Y" mode).
+
+```bash
+check_k8s_workloads --kubeconfig prod.kubeconfig \
+  --exclude-namespace kube-system \
+  --exclude-namespace cert-manager \
+  --exclude-namespace ingress-nginx
+```
+
+In **Icinga 2 config**, set the host var as an array:
+
+```icinga2
+vars.check_k8s_workloads_exclude_namespaces = [
+  "kube-system",
+  "cert-manager",
+  "ingress-nginx",
+]
+```
+
+In **Icinga Director**, set the matching custom field as an Array data type.
+
+Useful for excluding namespaces where deployments are intentionally scaled
+to zero or actively changing replica counts (e.g. cert-manager during
+certificate renewals — though that's usually short-lived).
+
+#### `-l SELECTOR` / `--selector SELECTOR`
+
+Standard Kubernetes label selector matched against workload labels (not the
+pod template's labels — those are different).
+
+```bash
+# Only workloads owned by the platform team
+check_k8s_workloads --kubeconfig prod.kubeconfig -l owner=platform
+
+# Critical workloads only
+check_k8s_workloads --kubeconfig prod.kubeconfig -l 'criticality in (high,critical)'
+```
+
+Use this to run different checks at different intervals or with different
+notification rules per workload class.
+
+### Workload type filtering
+
+#### `--no-deployments`
+
+Skip Deployment checks. Use when you want a separate Icinga service that
+only covers StatefulSets (often desirable because StatefulSets are usually
+stateful, slower to recover, and warrant a different escalation policy).
+
+```bash
+# Service A: deployments only (fast escalation)
+check_k8s_workloads --kubeconfig prod.kubeconfig --no-statefulsets
+
+# Service B: statefulsets only (different on-call rotation)
+check_k8s_workloads --kubeconfig prod.kubeconfig --no-deployments
+```
+
+#### `--no-statefulsets`
+
+Skip StatefulSet checks. Mirror of `--no-deployments`. Setting both flags
+together is an error (the plugin returns UNKNOWN).
+
+### Execution & output
+
+#### `-t SECONDS` / `--timeout SECONDS` (default: `30`)
+
+Hard plugin timeout. Two API list calls happen sequentially (deployments,
+statefulsets), so on large clusters total time can be higher than a
+single-resource check. Raise if you see UNKNOWN timeouts:
+
+```bash
+check_k8s_workloads --kubeconfig huge.kubeconfig -t 60
+```
+
+#### `-v` / `--verbose`
+
+Adds an `[OK]` line per healthy workload to the output. Convenient
+interactively (`check_k8s_workloads ... -v | less`); leave off in service
+definitions.
+
+#### `-V` / `--version`, `-h` / `--help`
+
+Standard.
+
+## Putting it together: example invocations
+
+Cluster-wide check, skip noisy / system namespaces:
+
+```bash
+check_k8s_workloads \
+  --kubeconfig /etc/icinga2/k8s/prod.kubeconfig \
+  --exclude-namespace kube-system \
+  --exclude-namespace cert-manager \
+  --exclude-namespace ingress-nginx
+```
+
+StatefulSet-only check with a tighter timeout (data plane):
+
+```bash
+check_k8s_workloads \
+  --kubeconfig /etc/icinga2/k8s/prod.kubeconfig \
+  --no-deployments \
+  -n data \
+  -t 20
+```
+
+Per-team check via label selector with token auth:
+
+```bash
+check_k8s_workloads \
+  --api-url https://kube-api.prod.example.com:6443 \
+  --token "$(cat /etc/icinga2/k8s/prod.token)" \
+  --ca-cert /etc/icinga2/k8s/prod-ca.crt \
+  -l team=payments
+```
+
 ## Alert Logic
 
 For each Deployment / StatefulSet with `spec.replicas > 0`:

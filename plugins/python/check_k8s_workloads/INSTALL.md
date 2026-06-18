@@ -34,9 +34,29 @@ specifics — the same package satisfies all three k8s checks).
 
 ## Kubernetes RBAC
 
-The plugin needs `list` on `deployments.apps` and `statefulsets.apps`. The
-built-in `view` ClusterRole already grants both. Reuse the same ServiceAccount
-and token created for `check_k8s_pods` if you have already deployed it.
+The plugin needs `list` on `deployments.apps` and `statefulsets.apps`. Both
+are covered by the built-in `view` ClusterRole, and also by the custom
+`icinga-readonly` ClusterRole defined in
+[`check_k8s_pods/INSTALL.md`](../check_k8s_pods/INSTALL.md#kubernetes-rbac).
+
+Reuse the same ServiceAccount and token created for `check_k8s_pods` — no
+extra RBAC objects are needed for this plugin.
+
+If you only want to deploy `check_k8s_workloads` standalone, the minimum is:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: icinga-workloads-readonly
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["list"]
+```
+
+…plus a ServiceAccount, ClusterRoleBinding, and long-lived token Secret as
+described in Steps 1, 3, and 4 of `check_k8s_pods/INSTALL.md`.
 
 ## Method 1: Config File Deployment
 

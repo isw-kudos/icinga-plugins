@@ -14,6 +14,7 @@
   - Create Host Template
   - Create Service
 - Verification
+- Troubleshooting
 
 ## Requirements
 
@@ -49,36 +50,107 @@ master or satellite.
 
 ## Kubernetes RBAC
 
-The plugin only needs `list` on `pods` cluster-wide (or on each namespace
-passed via `-n`). The built-in `view` ClusterRole is sufficient.
+This section is the canonical RBAC setup for all three `check_k8s_*` plugins.
+Configure it once and reuse the same ServiceAccount + token for
+`check_k8s_workloads` and `check_k8s_nodes`.
 
-Minimal example: dedicated ServiceAccount with read-only access cluster-wide.
+### Required Permissions
+
+| Plugin                | API Group | Resource     | Verb | Scope          |
+|-----------------------|-----------|--------------|------|----------------|
+| check_k8s_pods        | `""`      | `pods`       | list | namespace(s) or cluster-wide |
+| check_k8s_workloads   | `apps`    | `deployments`   | list | namespace(s) or cluster-wide |
+| check_k8s_workloads   | `apps`    | `statefulsets`  | list | namespace(s) or cluster-wide |
+| check_k8s_nodes       | `""`      | `nodes`      | list | **cluster-wide only** (nodes are cluster-scoped) |
+
+> The default `view` ClusterRole grants pods / deployments / statefulsets but
+> **does not** grant access to `nodes`. The custom ClusterRole below grants
+> exactly what the three plugins need — nothing more.
+
+### Prerequisites
+
+- `kubectl` configured against the target cluster with permission to create
+  ServiceAccounts, ClusterRoles, ClusterRoleBindings, and Secrets in
+  `kube-system` (cluster-admin or equivalent).
+- Decide on a namespace for the ServiceAccount. `kube-system` is conventional
+  for cluster-scoped monitoring; a dedicated namespace (e.g. `monitoring`)
+  is also fine — the ClusterRoleBinding works regardless.
+
+### Step 1 — Create the ServiceAccount
+
+```bash
+kubectl create serviceaccount icinga-readonly -n kube-system
+```
+
+Or declaratively (recommended — easier to put under config management):
 
 ```yaml
+# icinga-rbac.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: icinga-readonly
   namespace: kube-system
+```
+
+### Step 2 — Create the ClusterRole
+
+```yaml
+# icinga-rbac.yaml (continued)
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: icinga-readonly
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["list"]
+```
+
+> If you only deploy `check_k8s_pods` and `check_k8s_workloads` (no node
+> monitoring) you can drop `nodes` from the first rule and bind the built-in
+> `view` ClusterRole instead. The custom role above is required as soon as
+> `check_k8s_nodes` is in scope.
+
+### Step 3 — Bind the ClusterRole to the ServiceAccount
+
+```yaml
+# icinga-rbac.yaml (continued)
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: icinga-readonly-view
+  name: icinga-readonly
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: view
+  name: icinga-readonly
 subjects:
   - kind: ServiceAccount
     name: icinga-readonly
     namespace: kube-system
 ```
 
-Extract a long-lived token (Kubernetes >= 1.24 does not auto-create token
-Secrets — create one explicitly):
+Apply all three objects:
+
+```bash
+kubectl apply -f icinga-rbac.yaml
+```
+
+### Step 4 — Create a long-lived token Secret
+
+Kubernetes >= 1.24 does **not** auto-create token Secrets for ServiceAccounts.
+The short-lived `kubectl create token` flow returns a token that expires after
+~1 hour, which is unsuitable for an Icinga check that runs every minute.
+Create an explicit `kubernetes.io/service-account-token` Secret to get a
+non-expiring token:
 
 ```yaml
+# icinga-token.yaml
 apiVersion: v1
 kind: Secret
 metadata:
@@ -90,14 +162,186 @@ type: kubernetes.io/service-account-token
 ```
 
 ```bash
-kubectl -n kube-system get secret icinga-readonly-token \
-  -o jsonpath='{.data.token}' | base64 -d
-kubectl -n kube-system get secret icinga-readonly-token \
-  -o jsonpath='{.data.ca\.crt}' | base64 -d > /etc/icinga2/k8s/ca.crt
+kubectl apply -f icinga-token.yaml
 ```
 
-Store the token and CA cert under `/etc/icinga2/k8s/` with `0600` and owned by
-the `nagios`/`icinga` user.
+The controller will populate `data.token` and `data.ca.crt` within a few seconds.
+
+### Step 5 — Verify the binding works
+
+Before exporting the token, confirm RBAC is correctly wired up with
+`kubectl auth can-i`:
+
+```bash
+kubectl auth can-i list pods         --as=system:serviceaccount:kube-system:icinga-readonly -A
+kubectl auth can-i list deployments  --as=system:serviceaccount:kube-system:icinga-readonly -A
+kubectl auth can-i list statefulsets --as=system:serviceaccount:kube-system:icinga-readonly -A
+kubectl auth can-i list nodes        --as=system:serviceaccount:kube-system:icinga-readonly
+```
+
+All four commands should print `yes`. If any prints `no`, the ClusterRole rule
+list is incomplete or the ClusterRoleBinding references the wrong subject.
+
+### Step 6 — Extract the token and CA certificate
+
+On the Icinga host (or anywhere with `kubectl` access), prepare the target
+directory and extract both values:
+
+```bash
+mkdir -p /etc/icinga2/k8s
+
+# The directory MUST be group-owned by the Icinga group so the daemon can
+# traverse into it. A missing chown on the directory is the most common cause
+# of: "API error: ... PermissionError(13, 'Permission denied')" when the
+# plugin runs.
+chown root:icinga /etc/icinga2/k8s
+chmod 0750         /etc/icinga2/k8s
+
+kubectl -n kube-system get secret icinga-readonly-token \
+  -o jsonpath='{.data.token}' | base64 -d > /etc/icinga2/k8s/prod.token
+
+kubectl -n kube-system get secret icinga-readonly-token \
+  -o jsonpath='{.data.ca\.crt}' | base64 -d > /etc/icinga2/k8s/prod-ca.crt
+
+chown root:icinga /etc/icinga2/k8s/prod.token /etc/icinga2/k8s/prod-ca.crt
+chmod 0640         /etc/icinga2/k8s/prod.token /etc/icinga2/k8s/prod-ca.crt
+
+# On Debian/Ubuntu the Icinga 2 daemon historically runs as 'nagios:nagios'.
+# If `id icinga` returns "no such user" on your host, substitute 'nagios'
+# everywhere above.
+```
+
+Verify the running user can actually read both files before continuing:
+
+```bash
+sudo -u icinga test -r /etc/icinga2/k8s/prod-ca.crt && echo "ca readable"
+sudo -u icinga test -r /etc/icinga2/k8s/prod.token  && echo "token readable"
+```
+
+Both `echo` lines must print. If either is silent, re-check ownership of the
+**directory** (`stat /etc/icinga2/k8s`) — `0750 root:root` will block the
+icinga user even when the files themselves look correct.
+
+The API server URL is whatever `kubectl cluster-info` reports for the control
+plane endpoint:
+
+```bash
+kubectl cluster-info | head -1
+# Kubernetes control plane is running at https://kube-api.prod.example.com:6443
+```
+
+### Step 7 — Test the token end-to-end
+
+Confirm the credentials work outside of Icinga before wiring them into a
+service definition:
+
+```bash
+API_URL="https://kube-api.prod.example.com:6443"
+TOKEN="$(cat /etc/icinga2/k8s/prod.token)"
+
+curl --cacert /etc/icinga2/k8s/prod-ca.crt \
+     -H "Authorization: Bearer ${TOKEN}" \
+     "${API_URL}/api/v1/nodes?limit=1"
+```
+
+A `200 OK` JSON response confirms the SA, role, binding, token, and CA cert
+are all wired up correctly.
+
+You can also test the plugin directly:
+
+```bash
+/usr/lib/nagios/plugins/check_k8s_pods \
+  --api-url "${API_URL}" \
+  --token "${TOKEN}" \
+  --ca-cert /etc/icinga2/k8s/prod-ca.crt \
+  --exclude-namespace kube-system
+```
+
+### Option A — kubeconfig instead of raw token
+
+Some operators prefer a single kubeconfig file over separate token + CA paths.
+Build one from the values extracted in Step 6:
+
+```bash
+API_URL="https://kube-api.prod.example.com:6443"
+
+kubectl config set-cluster prod \
+  --server="${API_URL}" \
+  --certificate-authority=/etc/icinga2/k8s/prod-ca.crt \
+  --embed-certs=true \
+  --kubeconfig=/etc/icinga2/k8s/prod.kubeconfig
+
+kubectl config set-credentials icinga-readonly \
+  --token="$(cat /etc/icinga2/k8s/prod.token)" \
+  --kubeconfig=/etc/icinga2/k8s/prod.kubeconfig
+
+kubectl config set-context prod \
+  --cluster=prod --user=icinga-readonly \
+  --kubeconfig=/etc/icinga2/k8s/prod.kubeconfig
+
+kubectl config use-context prod \
+  --kubeconfig=/etc/icinga2/k8s/prod.kubeconfig
+
+chmod 0640 /etc/icinga2/k8s/prod.kubeconfig
+chown root:nagios /etc/icinga2/k8s/prod.kubeconfig
+```
+
+Then point the plugin at the kubeconfig:
+
+```bash
+/usr/lib/nagios/plugins/check_k8s_pods --kubeconfig /etc/icinga2/k8s/prod.kubeconfig
+```
+
+### Option B — Restrict scope to specific namespaces
+
+If you only want Icinga to see selected namespaces, replace the cluster-wide
+ClusterRoleBinding with a namespace-scoped RoleBinding per namespace. Note
+this is **incompatible with `check_k8s_nodes`** (nodes are cluster-scoped):
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: icinga-readonly
+  namespace: production
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: icinga-readonly
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: icinga-readonly
+subjects:
+  - kind: ServiceAccount
+    name: icinga-readonly
+    namespace: kube-system
+```
+
+Then invoke the plugin with `-n production` to match the granted scope.
+
+### Token rotation
+
+A token Secret created in Step 4 is valid until you delete the Secret.
+To rotate:
+
+```bash
+kubectl -n kube-system delete secret icinga-readonly-token
+kubectl apply -f icinga-token.yaml   # re-create
+# Re-run Step 6 to refresh the token file on the Icinga host
+```
+
+Icinga checks pick up the new token on the next check execution — no Icinga
+restart needed.
 
 ## Method 1: Config File Deployment
 
@@ -260,3 +504,66 @@ check_k8s_pods OK - All 42 pod(s) healthy | pods_total=42 pods_ok=42 pods_warnin
 icinga2 object list --type Service --name "check_k8s_pods"
 journalctl -u icinga2 -f
 ```
+
+## Troubleshooting
+
+### `API error: ... SSLError(PermissionError(13, 'Permission denied'))`
+
+The plugin can't `open(2)` the CA cert file passed to `--ca-cert` (or the CA
+embedded in the kubeconfig). This is a Linux filesystem permission error, not
+a TLS or Kubernetes error.
+
+Reproduce as the Icinga user:
+
+```bash
+sudo -u icinga cat /etc/icinga2/k8s/prod-ca.crt > /dev/null
+```
+
+If that fails with "Permission denied", fix ownership of **both** the
+directory and the file:
+
+```bash
+chown root:icinga /etc/icinga2/k8s /etc/icinga2/k8s/prod-ca.crt /etc/icinga2/k8s/prod.token
+chmod 0750         /etc/icinga2/k8s
+chmod 0640         /etc/icinga2/k8s/prod-ca.crt /etc/icinga2/k8s/prod.token
+```
+
+The most common cause is a missing `chown` on the directory: a file that is
+`0640 root:icinga` is unreadable if its parent directory is `0750 root:root`,
+because the icinga user cannot traverse into it.
+
+### `API error: ... HTTPSConnectionPool ... certificate verify failed`
+
+The CA cert does not match the API server's serving cert. Re-extract from the
+SA token Secret (`data.ca\.crt`) — do not reuse a kubeconfig CA from a
+different cluster or a stale cert.
+
+### `403 Forbidden` from the API
+
+The ServiceAccount lacks `list` on one of `pods` / `deployments` / `statefulsets`
+/ `nodes`. Re-run the verification step:
+
+```bash
+kubectl auth can-i list pods --as=system:serviceaccount:kube-system:icinga-readonly -A
+```
+
+If it prints `no`, the ClusterRole or ClusterRoleBinding is misconfigured.
+
+### `401 Unauthorized` from the API
+
+The token is invalid, expired, or was not extracted correctly. Re-run Step 6.
+Note that `kubectl create token <sa>` produces a short-lived token (~1 hour)
+that is **not suitable** for an Icinga check — you must create the long-lived
+`kubernetes.io/service-account-token` Secret from Step 4.
+
+### Plugin returns `UNKNOWN - timed out after 30s`
+
+The API server is unreachable from the Icinga host, or DNS resolution is slow.
+Test connectivity directly:
+
+```bash
+curl --max-time 5 -k https://<api-host>:6443/version
+```
+
+Raise `-t` / `vars.check_k8s_pods_timeout` if your API server is legitimately
+slow under load, but first rule out network/firewall issues.

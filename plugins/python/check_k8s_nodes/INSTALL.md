@@ -34,9 +34,31 @@ The same `kubernetes` Python package satisfies all three k8s checks — see
 
 ## Kubernetes RBAC
 
-The plugin needs `list` on `nodes` (cluster-scoped). The built-in `view`
-ClusterRole already grants this. Reuse the ServiceAccount and token from
-`check_k8s_pods` if already deployed.
+The plugin needs `list` on `nodes` (cluster-scoped). Note that the built-in
+`view` ClusterRole does **not** grant access to `nodes` — a custom ClusterRole
+is required.
+
+See [`check_k8s_pods/INSTALL.md`](../check_k8s_pods/INSTALL.md#kubernetes-rbac)
+for the canonical RBAC setup. The custom `icinga-readonly` ClusterRole in
+Step 2 of that guide already includes the `nodes` list permission, so if you
+followed it for `check_k8s_pods` you can reuse the same ServiceAccount and
+token here unchanged.
+
+If you only want to deploy `check_k8s_nodes` standalone, the minimum is:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: icinga-nodes-readonly
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["list"]
+```
+
+…plus a ServiceAccount, ClusterRoleBinding, and long-lived token Secret as
+described in Steps 1, 3, and 4 of `check_k8s_pods/INSTALL.md`.
 
 ## Method 1: Config File Deployment
 
