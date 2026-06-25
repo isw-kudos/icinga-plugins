@@ -11,6 +11,9 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | [check_itop_unassigned_tickets](plugins/bash/check_itop_unassigned_tickets) | Bash | Checks iTop for unassigned tickets via REST API | 1.0.0 | Stable |
 | [check_cnx_search](plugins/bash/check_cnx_search) | Bash | Checks HCL Connections search index freshness | 1.0.0 | Stable |
 | [check_cnx_docs](plugins/bash/check_cnx_docs) | Bash | Checks HCL Connections Docs Conversion server (sym_monitor + soffice) | 1.0.0 | Stable |
+| [check_k8s_pods](plugins/python/check_k8s_pods) | Python | Alerts on Kubernetes pod health (CrashLoopBackOff, ImagePullBackOff, Pending, restart counts) | 1.0.0 | Stable |
+| [check_k8s_workloads](plugins/python/check_k8s_workloads) | Python | Alerts on Kubernetes Deployment/StatefulSet replica health and stalled rollouts | 1.0.0 | Stable |
+| [check_k8s_nodes](plugins/python/check_k8s_nodes) | Python | Alerts on Kubernetes node Ready / pressure conditions and cordoned nodes | 1.0.0 | Stable |
 
 ## Compatibility
 
@@ -30,6 +33,15 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | check_cnx_docs | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Bash 4.x |
 | check_cnx_docs | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
 | check_cnx_docs | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_k8s_pods | >= 2.13.0 | Ubuntu 22.04/24.04 | Python 3.10 |
+| check_k8s_pods | >= 2.13.0 | Debian 11/12 | Python 3.9/3.11 |
+| check_k8s_pods | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Python 3.8/3.9 |
+| check_k8s_workloads | >= 2.13.0 | Ubuntu 22.04/24.04 | Python 3.10 |
+| check_k8s_workloads | >= 2.13.0 | Debian 11/12 | Python 3.9/3.11 |
+| check_k8s_workloads | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Python 3.8/3.9 |
+| check_k8s_nodes | >= 2.13.0 | Ubuntu 22.04/24.04 | Python 3.10 |
+| check_k8s_nodes | >= 2.13.0 | Debian 11/12 | Python 3.9/3.11 |
+| check_k8s_nodes | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Python 3.8/3.9 |
 
 ## Installation
 
