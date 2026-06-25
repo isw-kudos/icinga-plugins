@@ -15,8 +15,9 @@
 - A bind account permitted to read `cn=monitor`
 
 ### Monitor account
-Create a dedicated, least-privilege account that can read `cn=monitor` and grant it
-read access to the monitor backend. Do not reuse an administrative DN. Store its
+Create a dedicated, least-privilege account that can read `cn=monitor` — do not
+reuse an administrative DN. See **Creating the monitor bind account** in
+[README.md](README.md) for the full LDIF / `idsldapadd` process. Store its
 password in a root-owned file readable only by the Icinga user, e.g.:
 
 ```

@@ -21,6 +21,76 @@ Four sub-checks (all enabled by default, individually toggleable):
   a standard `ldapsearch` (OpenLDAP client utilities)
 - A bind account allowed to read `cn=monitor` (typically a read-only monitor DN)
 
+## Creating the monitor bind account
+
+Use a dedicated, least-privilege account — never the directory administrator
+(`cn=root`) — so the monitoring credential cannot modify the directory. The same
+account also works for `check_isds_replication`.
+
+> SDS commands shown below are the bundled `idsldap*` tools; the OpenLDAP
+> equivalents (`ldapadd`, `ldapsearch`) work too. Substitute your own suffix,
+> host, and admin DN. Run these as the SDS instance owner (or any host with the
+> client tools that can reach the server).
+
+**1. Create the account.** Write the entry to an LDIF file (`monitor-acct.ldif`):
+
+```ldif
+dn: cn=icinga-monitor,ou=services,o=example
+objectclass: inetOrgPerson
+cn: icinga-monitor
+sn: monitor
+userPassword: CHANGE_ME_STRONG_PASSWORD
+```
+
+Add it, binding as your directory admin:
+
+```
+idsldapadd -h ldap01.example.com -p 389 -D "cn=root" -w - -f monitor-acct.ldif
+```
+
+(`-w -` prompts for the admin password instead of putting it on the command line.)
+
+**2. Grant read access to `cn=monitor`.** On most SDS deployments `cn=monitor` is
+already readable by any authenticated bind, so step 1 may be enough — verify with
+step 3 first. If the search returns *Insufficient access*, grant it explicitly by
+adding an ACL to the monitor subtree (`monitor-acl.ldif`):
+
+```ldif
+dn: cn=monitor
+changetype: modify
+add: aclentry
+aclentry: access-id:cn=icinga-monitor,ou=services,o=example:normal:rsc:sensitive:rsc:critical:rsc
+```
+
+```
+idsldapmodify -h ldap01.example.com -p 389 -D "cn=root" -w - -f monitor-acl.ldif
+```
+
+The exact mechanism for restricting/granting monitor access varies by SDS / ISVD
+version — some sites instead add the DN to the server's administrative group via
+the Web Administration Tool (Server administration → Manage administrative group)
+or with a `DirDataAdmin`/read-only role. Consult your version's documentation if
+the ACL approach above does not apply.
+
+**3. Verify the account can read `cn=monitor`:**
+
+```
+idsldapsearch -h ldap01.example.com -p 389 \
+  -D "cn=icinga-monitor,ou=services,o=example" -w - \
+  -b cn=monitor -s base "(objectclass=*)" available_workers currentconnections
+```
+
+A successful result lists the monitor attributes. *Insufficient access* or no
+entry means revisit step 2.
+
+**4. Store the password for Icinga** in a file readable only by the Icinga user,
+and point the plugin at it with `-y` (see `INSTALL.md`):
+
+```
+install -o icinga -g icinga -m 0400 /dev/null /etc/icinga2/secrets/isds_monitor.pw
+printf '%s' 'CHANGE_ME_STRONG_PASSWORD' > /etc/icinga2/secrets/isds_monitor.pw
+```
+
 ## Compatibility
 See Compatibility Matrix below.
 
