@@ -55,9 +55,13 @@ passed on the command line is visible in the process list (`ps`).
 ## Plugin Installation
 
 ```
-cp check_isds_cert.sh /usr/lib/nagios/plugins/check_isds_cert
-chmod +x /usr/lib/nagios/plugins/check_isds_cert
+cp check_isds_cert.sh /usr/lib64/nagios/plugins/check_isds_cert
+chmod +x /usr/lib64/nagios/plugins/check_isds_cert
 ```
+
+> **Plugin path:** these examples use the AlmaLinux 9 path `/usr/lib64/nagios/plugins`
+> (the 64-bit RHEL-family `PluginDir`). On Debian/Ubuntu it is `/usr/lib/nagios/plugins`
+> — confirm your distribution's `PluginDir` constant and adjust the paths accordingly.
 
 Install on the node executing the check (the Icinga 2 agent on the SDS host) — not
 the Icinga 2 master.
@@ -130,7 +134,7 @@ secrets-store integration, never a command-line default.
 ## Verification
 
 ```
-/usr/lib/nagios/plugins/check_isds_cert \
+/usr/lib64/nagios/plugins/check_isds_cert \
   --kdb /home/dsrdbm01/idsslapd-dsrdbm01/etc/serverkey.kdb \
   --stash /home/dsrdbm01/idsslapd-dsrdbm01/etc/serverkey.sth
 ```

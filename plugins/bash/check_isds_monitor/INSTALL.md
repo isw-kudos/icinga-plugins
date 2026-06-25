@@ -28,9 +28,13 @@ printf '%s' 'THE_PASSWORD' > /etc/icinga2/secrets/isds_monitor.pw
 ## Plugin Installation
 
 ```
-cp check_isds_monitor.sh /usr/lib/nagios/plugins/check_isds_monitor
-chmod +x /usr/lib/nagios/plugins/check_isds_monitor
+cp check_isds_monitor.sh /usr/lib64/nagios/plugins/check_isds_monitor
+chmod +x /usr/lib64/nagios/plugins/check_isds_monitor
 ```
+
+> **Plugin path:** these examples use the AlmaLinux 9 path `/usr/lib64/nagios/plugins`
+> (the 64-bit RHEL-family `PluginDir`). On Debian/Ubuntu it is `/usr/lib/nagios/plugins`
+> — confirm your distribution's `PluginDir` constant and adjust the paths accordingly.
 
 Install on the node executing the check (typically the Icinga agent on, or near,
 the SDS host) — not necessarily the Icinga 2 master.
@@ -109,7 +113,7 @@ Director use a Data Field and a secrets-store integration.
 ## Verification
 
 ```
-/usr/lib/nagios/plugins/check_isds_monitor -H 127.0.0.1 -D cn=monitor \
+/usr/lib64/nagios/plugins/check_isds_monitor -H 127.0.0.1 -D cn=monitor \
   -y /etc/icinga2/secrets/isds_monitor.pw
 ```
 

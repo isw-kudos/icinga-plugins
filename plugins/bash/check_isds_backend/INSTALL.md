@@ -41,7 +41,7 @@ Icinga user a narrow sudo rule. Add a file under `/etc/sudoers.d/` (validate wit
 
 ```
 # /etc/sudoers.d/icinga-check_isds_backend
-icinga ALL=(root) NOPASSWD: /usr/lib/nagios/plugins/check_isds_backend
+icinga ALL=(root) NOPASSWD: /usr/lib64/nagios/plugins/check_isds_backend
 ```
 
 Then have Icinga invoke the plugin via `sudo`, e.g. set the CheckCommand to
@@ -64,9 +64,14 @@ missing, those sub-checks report UNKNOWN (never crash).
 ## Plugin Installation
 
 ```
-cp check_isds_backend.sh /usr/lib/nagios/plugins/check_isds_backend
-chmod +x /usr/lib/nagios/plugins/check_isds_backend
+cp check_isds_backend.sh /usr/lib64/nagios/plugins/check_isds_backend
+chmod +x /usr/lib64/nagios/plugins/check_isds_backend
 ```
+
+> **Plugin path:** these examples use the AlmaLinux 9 path `/usr/lib64/nagios/plugins`
+> (the 64-bit RHEL-family `PluginDir`). On Debian/Ubuntu it is `/usr/lib/nagios/plugins`
+> — confirm your distribution's `PluginDir` constant and adjust the paths accordingly.
+> The sudoers rule above must use the same path.
 
 ## Method 1: Config File Deployment
 
@@ -144,12 +149,12 @@ Always **Deploy** after changes in Director.
 
 Process check only (no DB2 needed):
 ```
-/usr/lib/nagios/plugins/check_isds_backend --no-db2-tablespace --no-db2-logs
+/usr/lib64/nagios/plugins/check_isds_backend --no-db2-tablespace --no-db2-logs
 ```
 
 Full check (as the instance owner or with sudo + `--db2-user`):
 ```
-/usr/lib/nagios/plugins/check_isds_backend \
+/usr/lib64/nagios/plugins/check_isds_backend \
   --db2-instance dsrdbm01 --db2-database ldapdb2 --db2-user dsrdbm01
 ```
 
