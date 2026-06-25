@@ -72,21 +72,27 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 ### Create CheckCommand
 1. Director > Commands > External Commands > **+ Add**
 2. Name: `check_isds_replication`, Command: `$USER1$/check_isds_replication`
-3. Arguments tab — add (Value column shown):
+3. Arguments tab — add each argument below. *Type* is the Director value type,
+   *Required* mirrors the CheckCommand, *Repeat key* (`repeat_key`) applies to
+   array arguments, and *Skip key* shows the `set_if` boolean that gates a flag
+   argument (boolean flags carry no value — set them only via their `set_if` var):
 
-   | Argument    | Value                       |
-   |-------------|-----------------------------|
-   | -H          | `$isds_repl_host$`          |
-   | -p          | `$isds_repl_port$`          |
-   | -D          | `$isds_repl_binddn$`        |
-   | -y          | `$isds_repl_passfile$`      |
-   | -b          | `$isds_repl_base$`          |
-   | --repl-base | `$isds_repl_repl_base$`     |
-   | -w          | `$isds_repl_pending_warn$`  |
-   | -c          | `$isds_repl_pending_crit$`  |
-   | --lag-warn  | `$isds_repl_lag_warn$`      |
-   | --lag-crit  | `$isds_repl_lag_crit$`      |
-   | -t          | `$isds_repl_timeout$`       |
+   | Argument    | Value                       | Type    | Required | Repeat key | Skip key (set_if)      | Description                                  |
+   |-------------|-----------------------------|---------|----------|------------|------------------------|----------------------------------------------|
+   | -H          | `$isds_repl_host$`          | String  | No       | No         | —                      | LDAP host/IP (default 127.0.0.1)             |
+   | -p          | `$isds_repl_port$`          | Number  | No       | No         | —                      | LDAP port (default 389)                      |
+   | --ldaps     | (none)                      | Boolean | No       | No         | `$isds_repl_ldaps$`    | Use ldaps://                                 |
+   | -Z          | (none)                      | Boolean | No       | No         | `$isds_repl_starttls$` | Use StartTLS on the plain port               |
+   | -D          | `$isds_repl_binddn$`        | String  | No       | No         | —                      | Bind DN (read-only replication account)      |
+   | -y          | `$isds_repl_passfile$`      | String  | No       | No         | —                      | File containing the bind password            |
+   | -b          | `$isds_repl_base$`          | String  | **Yes**  | No         | —                      | Search base for replication agreements       |
+   | --repl-base | `$isds_repl_repl_base$`     | String  | No       | No         | —                      | Optional sub-tree under -b to search instead |
+   | --agreement | `$isds_repl_agreement$`     | String  | No       | **Yes**    | —                      | Only check agreement(s) with this cn (array) |
+   | -w          | `$isds_repl_pending_warn$`  | Number  | No       | No         | —                      | Warn when pending changes >= N               |
+   | -c          | `$isds_repl_pending_crit$`  | Number  | No       | No         | —                      | Crit when pending changes >= N               |
+   | --lag-warn  | `$isds_repl_lag_warn$`      | Number  | No       | No         | —                      | Warn when last-change age >= seconds         |
+   | --lag-crit  | `$isds_repl_lag_crit$`      | Number  | No       | No         | —                      | Crit when last-change age >= seconds         |
+   | -t          | `$isds_repl_timeout$`       | Number  | No       | No         | —                      | Timeout in seconds (default 30)              |
 
 4. **Store**, then **Deploy**.
 

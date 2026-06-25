@@ -98,16 +98,19 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 ### Create CheckCommand
 1. Director > Commands > External Commands > **+ Add**
 2. Name: `check_isds_cert`, Command: `$USER1$/check_isds_cert`
-3. Arguments tab — add (Value column shown):
+3. Arguments tab — add each argument below. *Type* is the Director value type and
+   *Required* mirrors the CheckCommand. None of these arguments use a repeat key or
+   skip key:
 
-   | Argument   | Value                    |
-   |------------|--------------------------|
-   | --kdb      | `$isds_cert_kdb$`        |
-   | --stash    | `$isds_cert_stash$`      |
-   | --label    | `$isds_cert_label$`      |
-   | -w         | `$isds_cert_warn$`       |
-   | -c         | `$isds_cert_crit$`       |
-   | -t         | `$isds_cert_timeout$`    |
+   | Argument   | Value                  | Type   | Required | Repeat key | Skip key | Description                                     |
+   |------------|------------------------|--------|----------|------------|----------|-------------------------------------------------|
+   | --kdb      | `$isds_cert_kdb$`      | String | **Yes**  | No         | —        | Path to the GSKit CMS keystore (.kdb)           |
+   | --stash    | `$isds_cert_stash$`    | String | No       | No         | —        | Path to the .sth stash file (preferred)         |
+   | --password | `$isds_cert_password$` | String | No       | No         | —        | Keystore password (discouraged - visible in ps) |
+   | --label    | `$isds_cert_label$`    | String | No       | No         | —        | Check only this cert label (default: all certs) |
+   | -w         | `$isds_cert_warn$`     | Number | No       | No         | —        | Warn when a cert expires within DAYS days       |
+   | -c         | `$isds_cert_crit$`     | Number | No       | No         | —        | Crit when a cert expires within DAYS days       |
+   | -t         | `$isds_cert_timeout$`  | Number | No       | No         | —        | Timeout in seconds (default 30)                 |
 
 4. **Store**, then **Deploy**.
 

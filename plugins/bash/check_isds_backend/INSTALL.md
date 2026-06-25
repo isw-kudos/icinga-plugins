@@ -106,18 +106,27 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 1. Director > Commands > External Commands > **+ Add**
 2. Name: `check_isds_backend`, Command: `$USER1$/check_isds_backend`
    (or `sudo $USER1$/check_isds_backend` if using the sudo approach above)
-3. Arguments tab — add (Value column shown):
+3. Arguments tab — add each argument below. *Type* is the Director value type,
+   *Required* mirrors the CheckCommand (the `--db2-*` args are required only for the
+   DB2 sub-checks), *Repeat key* (`repeat_key`) applies to array arguments, and
+   *Skip key* shows the `set_if` boolean that gates a flag argument (boolean flags
+   carry no value — set them only via their `set_if` var):
 
-   | Argument          | Value                            |
-   |-------------------|----------------------------------|
-   | --db2-instance    | `$isds_backend_db2_instance$`    |
-   | --db2-database    | `$isds_backend_db2_database$`    |
-   | --db2-user        | `$isds_backend_db2_user$`        |
-   | -w                | `$isds_backend_tbsp_warn$`       |
-   | -c                | `$isds_backend_tbsp_crit$`       |
-   | --log-warn        | `$isds_backend_log_warn$`        |
-   | --log-crit        | `$isds_backend_log_crit$`        |
-   | -t                | `$isds_backend_timeout$`         |
+   | Argument            | Value                         | Type    | Required          | Repeat key | Skip key (set_if)              | Description                               |
+   |---------------------|-------------------------------|---------|-------------------|------------|--------------------------------|-------------------------------------------|
+   | --db2-instance      | `$isds_backend_db2_instance$` | String  | For db2-* checks  | No         | —                              | DB2 instance name                         |
+   | --db2-database      | `$isds_backend_db2_database$` | String  | For db2-* checks  | No         | —                              | DB2 database name                         |
+   | --db2-user          | `$isds_backend_db2_user$`     | String  | No                | No         | —                              | Run db2 as this OS user via su - USER -c  |
+   | -w                  | `$isds_backend_tbsp_warn$`    | Number  | No                | No         | —                              | Tablespace warn threshold (percent)       |
+   | -c                  | `$isds_backend_tbsp_crit$`    | Number  | No                | No         | —                              | Tablespace crit threshold (percent)       |
+   | --log-warn          | `$isds_backend_log_warn$`     | Number  | No                | No         | —                              | Transaction-log warn threshold (percent)  |
+   | --log-crit          | `$isds_backend_log_crit$`     | Number  | No                | No         | —                              | Transaction-log crit threshold (percent)  |
+   | --diradm-crit       | (none)                        | Boolean | No                | No         | `$isds_backend_diradm_crit$`   | Treat a missing ibmdiradm as CRITICAL     |
+   | --no-diradm         | (none)                        | Boolean | No                | No         | `$isds_backend_no_diradm$`     | Skip the ibmdiradm process check          |
+   | --no-proc           | (none)                        | Boolean | No                | No         | `$isds_backend_no_proc$`       | Disable the process liveness sub-check    |
+   | --no-db2-tablespace | (none)                        | Boolean | No                | No         | `$isds_backend_no_tablespace$` | Disable the DB2 tablespace sub-check      |
+   | --no-db2-logs       | (none)                        | Boolean | No                | No         | `$isds_backend_no_logs$`       | Disable the DB2 transaction-log sub-check |
+   | -t                  | `$isds_backend_timeout$`      | Number  | No                | No         | —                              | Timeout per external command (default 30) |
 
 4. **Store**, then **Deploy**.
 
