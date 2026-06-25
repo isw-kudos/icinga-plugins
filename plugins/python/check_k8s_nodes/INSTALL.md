@@ -25,9 +25,13 @@
 ## Plugin Installation
 
 ```bash
-cp check_k8s_nodes.py /usr/lib/nagios/plugins/check_k8s_nodes
-chmod +x /usr/lib/nagios/plugins/check_k8s_nodes
+cp check_k8s_nodes.py /usr/lib64/nagios/plugins/check_k8s_nodes
+chmod +x /usr/lib64/nagios/plugins/check_k8s_nodes
 ```
+
+> **Plugin path:** these examples use the AlmaLinux 9 path `/usr/lib64/nagios/plugins`
+> (the 64-bit RHEL-family `PluginDir`). On Debian/Ubuntu it is `/usr/lib/nagios/plugins`
+> — confirm your distribution's `PluginDir` constant and adjust the paths accordingly.
 
 The same `kubernetes` Python package satisfies all three k8s checks — see
 `check_k8s_pods/INSTALL.md` for distro-specific install instructions.
@@ -149,7 +153,7 @@ Reuse the `kubernetes-cluster` template defined under `check_k8s_pods` (it sets
 ## Verification
 
 ```bash
-/usr/lib/nagios/plugins/check_k8s_nodes \
+/usr/lib64/nagios/plugins/check_k8s_nodes \
   --kubeconfig /etc/icinga2/k8s/prod.kubeconfig
 ```
 

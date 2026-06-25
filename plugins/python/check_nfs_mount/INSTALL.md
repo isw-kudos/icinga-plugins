@@ -25,9 +25,13 @@
 ## Plugin Installation
 
 ```bash
-cp check_nfs_mount.py /usr/lib/nagios/plugins/check_nfs_mount
-chmod +x /usr/lib/nagios/plugins/check_nfs_mount
+cp check_nfs_mount.py /usr/lib64/nagios/plugins/check_nfs_mount
+chmod +x /usr/lib64/nagios/plugins/check_nfs_mount
 ```
+
+> **Plugin path:** these examples use the AlmaLinux 9 path `/usr/lib64/nagios/plugins`
+> (the 64-bit RHEL-family `PluginDir`). On Debian/Ubuntu it is `/usr/lib/nagios/plugins`
+> — confirm your distribution's `PluginDir` constant and adjust the paths accordingly.
 
 If using a satellite/agent setup, install the plugin on the node that has the
 NFS mounts — NFS mounts are local to the mounting host. Do not run this check
@@ -175,7 +179,7 @@ each mount path as an element.
 ## Verification
 
 ```bash
-/usr/lib/nagios/plugins/check_nfs_mount -m /mnt/data -m /mnt/backup -t 10
+/usr/lib64/nagios/plugins/check_nfs_mount -m /mnt/data -m /mnt/backup -t 10
 ```
 
 Expected output (all mounts healthy):
