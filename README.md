@@ -14,6 +14,10 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | [check_k8s_pods](plugins/python/check_k8s_pods) | Python | Alerts on Kubernetes pod health (CrashLoopBackOff, ImagePullBackOff, Pending, restart counts) | 1.0.0 | Stable |
 | [check_k8s_workloads](plugins/python/check_k8s_workloads) | Python | Alerts on Kubernetes Deployment/StatefulSet replica health and stalled rollouts | 1.0.0 | Stable |
 | [check_k8s_nodes](plugins/python/check_k8s_nodes) | Python | Alerts on Kubernetes node Ready / pressure conditions and cordoned nodes | 1.0.0 | Stable |
+| [check_isds_monitor](plugins/bash/check_isds_monitor) | Bash | Checks IBM Security Directory Server cn=monitor (worker pool, connections, throughput, cache hit ratios) | 1.0.0 | Stable |
+| [check_isds_replication](plugins/bash/check_isds_replication) | Bash | Checks IBM Security Directory Server replication agreement state and pending-change backlog | 1.0.0 | Stable |
+| [check_isds_backend](plugins/bash/check_isds_backend) | Bash | Checks IBM Security Directory Server process liveness and DB2 backend (tablespace/log usage) | 1.0.0 | Stable |
+| [check_isds_cert](plugins/bash/check_isds_cert) | Bash | Checks IBM Security Directory Server GSKit keystore (.kdb) TLS certificate expiry | 1.0.0 | Stable |
 
 ## Compatibility
 
@@ -42,6 +46,18 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | check_k8s_nodes | >= 2.13.0 | Ubuntu 22.04/24.04 | Python 3.10 |
 | check_k8s_nodes | >= 2.13.0 | Debian 11/12 | Python 3.9/3.11 |
 | check_k8s_nodes | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Python 3.8/3.9 |
+| check_isds_monitor | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
+| check_isds_monitor | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_isds_monitor | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Bash 4.x |
+| check_isds_replication | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
+| check_isds_replication | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_isds_replication | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Bash 4.x |
+| check_isds_backend | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
+| check_isds_backend | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_isds_backend | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Bash 4.x |
+| check_isds_cert | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
+| check_isds_cert | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_isds_cert | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Bash 4.x |
 
 ## Installation
 
