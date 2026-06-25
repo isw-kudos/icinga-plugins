@@ -31,6 +31,12 @@ account also works for `check_isds_replication`.
 > equivalents (`ldapadd`, `ldapsearch`) work too. Substitute your own suffix,
 > host, and admin DN. Run these as the SDS instance owner (or any host with the
 > client tools that can reach the server).
+>
+> **Passwords:** `-w PASSWORD` takes the password as its argument, so keep it
+> next to the flag and quote it (`-w 'p@ss'`). To avoid the password in shell
+> history use `-y FILE` (a file containing only the password) instead, or be
+> prompted with `-w '?'` (the IBM `idsldap*` convention; the `?` is quoted so the
+> shell does not glob it). With OpenLDAP tools the prompt flag is `-W`.
 
 **1. Create the account.** Write the entry to an LDIF file (`monitor-acct.ldif`):
 
@@ -45,10 +51,8 @@ userPassword: CHANGE_ME_STRONG_PASSWORD
 Add it, binding as your directory admin:
 
 ```
-idsldapadd -h ldap01.example.com -p 389 -D "cn=root" -w - -f monitor-acct.ldif
+idsldapadd -h ldap01.example.com -p 389 -D "cn=root" -w '?' -f monitor-acct.ldif
 ```
-
-(`-w -` prompts for the admin password instead of putting it on the command line.)
 
 **2. Grant read access to `cn=monitor`.** On most SDS deployments `cn=monitor` is
 already readable by any authenticated bind, so step 1 may be enough — verify with
@@ -63,7 +67,7 @@ aclentry: access-id:cn=icinga-monitor,ou=services,o=example:normal:rsc:sensitive
 ```
 
 ```
-idsldapmodify -h ldap01.example.com -p 389 -D "cn=root" -w - -f monitor-acl.ldif
+idsldapmodify -h ldap01.example.com -p 389 -D "cn=root" -w '?' -f monitor-acl.ldif
 ```
 
 The exact mechanism for restricting/granting monitor access varies by SDS / ISVD
@@ -76,7 +80,7 @@ the ACL approach above does not apply.
 
 ```
 idsldapsearch -h ldap01.example.com -p 389 \
-  -D "cn=icinga-monitor,ou=services,o=example" -w - \
+  -D "cn=icinga-monitor,ou=services,o=example" -w '?' \
   -b cn=monitor -s base "(objectclass=*)" available_workers currentconnections
 ```
 
