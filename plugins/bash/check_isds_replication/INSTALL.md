@@ -27,9 +27,13 @@ printf '%s' 'THE_PASSWORD' > /etc/icinga2/secrets/isds_repl.pw
 ## Plugin Installation
 
 ```
-cp check_isds_replication.sh /usr/lib/nagios/plugins/check_isds_replication
-chmod +x /usr/lib/nagios/plugins/check_isds_replication
+cp check_isds_replication.sh /usr/lib64/nagios/plugins/check_isds_replication
+chmod +x /usr/lib64/nagios/plugins/check_isds_replication
 ```
+
+> **Plugin path:** these examples use the AlmaLinux 9 path `/usr/lib64/nagios/plugins`
+> (the 64-bit RHEL-family `PluginDir`). On Debian/Ubuntu it is `/usr/lib/nagios/plugins`
+> — confirm your distribution's `PluginDir` constant and adjust the paths accordingly.
 
 Install on the node executing the check (typically the Icinga agent on, or near,
 the SDS host) — not necessarily the Icinga 2 master.
@@ -72,21 +76,27 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 ### Create CheckCommand
 1. Director > Commands > External Commands > **+ Add**
 2. Name: `check_isds_replication`, Command: `$USER1$/check_isds_replication`
-3. Arguments tab — add (Value column shown):
+3. Arguments tab — add each argument below. *Type* is the Director value type,
+   *Required* mirrors the CheckCommand, *Repeat key* (`repeat_key`) applies to
+   array arguments, and *Skip key* shows the `set_if` boolean that gates a flag
+   argument (boolean flags carry no value — set them only via their `set_if` var):
 
-   | Argument    | Value                       |
-   |-------------|-----------------------------|
-   | -H          | `$isds_repl_host$`          |
-   | -p          | `$isds_repl_port$`          |
-   | -D          | `$isds_repl_binddn$`        |
-   | -y          | `$isds_repl_passfile$`      |
-   | -b          | `$isds_repl_base$`          |
-   | --repl-base | `$isds_repl_repl_base$`     |
-   | -w          | `$isds_repl_pending_warn$`  |
-   | -c          | `$isds_repl_pending_crit$`  |
-   | --lag-warn  | `$isds_repl_lag_warn$`      |
-   | --lag-crit  | `$isds_repl_lag_crit$`      |
-   | -t          | `$isds_repl_timeout$`       |
+   | Argument    | Value                       | Type    | Required | Repeat key | Skip key (set_if)      | Description                                  |
+   |-------------|-----------------------------|---------|----------|------------|------------------------|----------------------------------------------|
+   | -H          | `$isds_repl_host$`          | String  | No       | No         | —                      | LDAP host/IP (default 127.0.0.1)             |
+   | -p          | `$isds_repl_port$`          | Number  | No       | No         | —                      | LDAP port (default 389)                      |
+   | --ldaps     | (none)                      | Boolean | No       | No         | `$isds_repl_ldaps$`    | Use ldaps://                                 |
+   | -Z          | (none)                      | Boolean | No       | No         | `$isds_repl_starttls$` | Use StartTLS on the plain port               |
+   | -D          | `$isds_repl_binddn$`        | String  | No       | No         | —                      | Bind DN (read-only replication account)      |
+   | -y          | `$isds_repl_passfile$`      | String  | No       | No         | —                      | File containing the bind password            |
+   | -b          | `$isds_repl_base$`          | String  | **Yes**  | No         | —                      | Search base for replication agreements       |
+   | --repl-base | `$isds_repl_repl_base$`     | String  | No       | No         | —                      | Optional sub-tree under -b to search instead |
+   | --agreement | `$isds_repl_agreement$`     | String  | No       | **Yes**    | —                      | Only check agreement(s) with this cn (array) |
+   | -w          | `$isds_repl_pending_warn$`  | Number  | No       | No         | —                      | Warn when pending changes >= N               |
+   | -c          | `$isds_repl_pending_crit$`  | Number  | No       | No         | —                      | Crit when pending changes >= N               |
+   | --lag-warn  | `$isds_repl_lag_warn$`      | Number  | No       | No         | —                      | Warn when last-change age >= seconds         |
+   | --lag-crit  | `$isds_repl_lag_crit$`      | Number  | No       | No         | —                      | Crit when last-change age >= seconds         |
+   | -t          | `$isds_repl_timeout$`       | Number  | No       | No         | —                      | Timeout in seconds (default 30)              |
 
 4. **Store**, then **Deploy**.
 
@@ -104,7 +114,7 @@ Director use a Data Field and a secrets-store integration.
 ## Verification
 
 ```
-/usr/lib/nagios/plugins/check_isds_replication -H 127.0.0.1 -D cn=monitor \
+/usr/lib64/nagios/plugins/check_isds_replication -H 127.0.0.1 -D cn=monitor \
   -y /etc/icinga2/secrets/isds_repl.pw -b "dc=example,dc=com"
 ```
 
