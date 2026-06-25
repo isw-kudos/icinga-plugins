@@ -35,9 +35,13 @@
 ## Plugin Installation
 
 ```bash
-cp check_itop_unassigned_tickets.sh /usr/lib/nagios/plugins/check_itop_unassigned_tickets
-chmod +x /usr/lib/nagios/plugins/check_itop_unassigned_tickets
+cp check_itop_unassigned_tickets.sh /usr/lib64/nagios/plugins/check_itop_unassigned_tickets
+chmod +x /usr/lib64/nagios/plugins/check_itop_unassigned_tickets
 ```
+
+> **Plugin path:** these examples use the AlmaLinux 9 path `/usr/lib64/nagios/plugins`
+> (the 64-bit RHEL-family `PluginDir`). On Debian/Ubuntu it is `/usr/lib/nagios/plugins`
+> — confirm your distribution's `PluginDir` constant and adjust the paths accordingly.
 
 If using a satellite/agent setup, install the plugin on the node executing the check,
 not necessarily the Icinga 2 master.
@@ -195,7 +199,7 @@ integration.
 ## Verification
 
 ```bash
-/usr/lib/nagios/plugins/check_itop_unassigned_tickets \
+/usr/lib64/nagios/plugins/check_itop_unassigned_tickets \
   -H https://itop.example.com \
   -u icinga_monitor \
   -p secret \

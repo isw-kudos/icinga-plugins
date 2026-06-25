@@ -30,9 +30,13 @@
 ## Plugin Installation
 
 ```bash
-cp check_cnx_docs.sh /usr/lib/nagios/plugins/check_cnx_docs
-chmod +x /usr/lib/nagios/plugins/check_cnx_docs
+cp check_cnx_docs.sh /usr/lib64/nagios/plugins/check_cnx_docs
+chmod +x /usr/lib64/nagios/plugins/check_cnx_docs
 ```
+
+> **Plugin path:** these examples use the AlmaLinux 9 path `/usr/lib64/nagios/plugins`
+> (the 64-bit RHEL-family `PluginDir`). On Debian/Ubuntu it is `/usr/lib/nagios/plugins`
+> — confirm your distribution's `PluginDir` constant and adjust the paths accordingly.
 
 If using a satellite/agent setup, install on the node executing the
 check.
@@ -241,7 +245,7 @@ sudo -u icinga pgrep -fa soffice
 sudo -u icinga pgrep -fa sym_monitor
 
 # Run the plugin as the icinga user
-sudo -u icinga /usr/lib/nagios/plugins/check_cnx_docs
+sudo -u icinga /usr/lib64/nagios/plugins/check_cnx_docs
 echo "exit=$?"
 ```
 

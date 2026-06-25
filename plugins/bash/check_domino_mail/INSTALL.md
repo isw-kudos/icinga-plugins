@@ -72,9 +72,11 @@ sudo -u icinga sudo -u notes /usr/lib/nagios/plugins/check_domino_mail
 ## Plugin Installation
 
 ```bash
-cp check_domino_mail.sh /usr/lib/nagios/plugins/check_domino_mail
-chmod +x /usr/lib/nagios/plugins/check_domino_mail
+cp check_domino_mail.sh /usr/lib64/nagios/plugins/check_domino_mail
+chmod +x /usr/lib64/nagios/plugins/check_domino_mail
 ```
+
+> **Plugin path:** RHEL/AlmaLinux use `/usr/lib64/nagios/plugins` (shown here); Debian/Ubuntu use `/usr/lib/nagios/plugins` (see the dual-path examples above).
 
 **Install on each Domino host.** The plugin runs local checks (`domino status`,
 `domino cmd`, loopback network probes) and must execute on the host being monitored,
@@ -83,7 +85,7 @@ not the Icinga 2 master.
 Verify from the agent user:
 
 ```bash
-sudo -u nagios /usr/lib/nagios/plugins/check_domino_mail
+sudo -u nagios /usr/lib64/nagios/plugins/check_domino_mail
 ```
 
 ## Method 1: Config File Deployment
@@ -227,13 +229,13 @@ In Director, set these on the host object under **Custom Properties**.
 
 ```bash
 # Full check (all sub-checks)
-sudo -u nagios /usr/lib/nagios/plugins/check_domino_mail
+sudo -u nagios /usr/lib64/nagios/plugins/check_domino_mail
 
 # Quick connectivity test with reduced checks
-sudo -u nagios /usr/lib/nagios/plugins/check_domino_mail --no-show-server --no-nrpc-trace
+sudo -u nagios /usr/lib64/nagios/plugins/check_domino_mail --no-show-server --no-nrpc-trace
 
 # Check a specific sub-check only
-sudo -u nagios /usr/lib/nagios/plugins/check_domino_mail \
+sudo -u nagios /usr/lib64/nagios/plugins/check_domino_mail \
   --no-status --no-nrpc-tcp --no-nrpc-handshake \
   --no-show-server --no-nrpc-trace --no-http
 ```

@@ -27,9 +27,13 @@
 ## Plugin Installation
 
 ```bash
-cp check_k8s_pods.py /usr/lib/nagios/plugins/check_k8s_pods
-chmod +x /usr/lib/nagios/plugins/check_k8s_pods
+cp check_k8s_pods.py /usr/lib64/nagios/plugins/check_k8s_pods
+chmod +x /usr/lib64/nagios/plugins/check_k8s_pods
 ```
+
+> **Plugin path:** these examples use the AlmaLinux 9 path `/usr/lib64/nagios/plugins`
+> (the 64-bit RHEL-family `PluginDir`). On Debian/Ubuntu it is `/usr/lib/nagios/plugins`
+> — confirm your distribution's `PluginDir` constant and adjust the paths accordingly.
 
 Install the Python client. Prefer a system package where available:
 
@@ -250,7 +254,7 @@ are all wired up correctly.
 You can also test the plugin directly:
 
 ```bash
-/usr/lib/nagios/plugins/check_k8s_pods \
+/usr/lib64/nagios/plugins/check_k8s_pods \
   --api-url "${API_URL}" \
   --token "${TOKEN}" \
   --ca-cert /etc/icinga2/k8s/prod-ca.crt \
@@ -289,7 +293,7 @@ chown root:nagios /etc/icinga2/k8s/prod.kubeconfig
 Then point the plugin at the kubeconfig:
 
 ```bash
-/usr/lib/nagios/plugins/check_k8s_pods --kubeconfig /etc/icinga2/k8s/prod.kubeconfig
+/usr/lib64/nagios/plugins/check_k8s_pods --kubeconfig /etc/icinga2/k8s/prod.kubeconfig
 ```
 
 ### Option B — Restrict scope to specific namespaces
@@ -489,7 +493,7 @@ this repository's `.gitignore`) with `0600` ownership.
 ## Verification
 
 ```bash
-/usr/lib/nagios/plugins/check_k8s_pods \
+/usr/lib64/nagios/plugins/check_k8s_pods \
   --kubeconfig /etc/icinga2/k8s/prod.kubeconfig \
   --exclude-namespace kube-system
 ```
