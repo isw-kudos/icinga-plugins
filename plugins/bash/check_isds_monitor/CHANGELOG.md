@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-06-26
+### Fixed
+- Unfold LDIF line continuations (RFC 2849) before parsing, so long folded
+  attribute values from `idsldapsearch -L` are read intact. Shared hardening with
+  check_isds_replication; no behaviour change for the short `cn=monitor` values.
+
 ## [1.1.1] - 2026-06-26
 ### Fixed
 - Corrected `cn=monitor` cache attribute names for SDS / ISVD 10.x: derive the
