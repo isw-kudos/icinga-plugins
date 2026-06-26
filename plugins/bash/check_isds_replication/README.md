@@ -83,6 +83,14 @@ check_isds_replication CRITICAL - replica_b=CRIT | agreements_ok=0 agreements_er
   generalized time (`YYYYMMDDHHMMSS[.f]Z`).
 - If zero agreements are found under the base, the plugin returns `UNKNOWN` (not
   OK) so a mistyped base or missing agreements cannot masquerade as healthy.
+- **Peer / master-master topology:** operational status (`ibm-replicationState`,
+  pending count, last change id) is only populated on the **supplier** side of
+  each agreement. On a peer, the consumer-side agreement entry is config-only, so
+  the plugin reports it as OK with a "no live status on this host — verify on the
+  supplier" note rather than a hollow "healthy". **Run the check on every peer**;
+  each covers the directions it supplies. The `ibm-replicationonhold` flag is read
+  on both sides, so an administratively held agreement is caught as CRITICAL on
+  either peer.
 - The set of "error" state strings (suspend, on hold, error, retrying, waiting,
   binding) is defined in the `ERROR_STATES` array near the top of the script and
   can be tuned for your SDS version.
@@ -96,9 +104,9 @@ check_isds_replication CRITICAL - replica_b=CRIT | agreements_ok=0 agreements_er
 
 | Plugin Version | Icinga 2 Version | OS                     | Lang Version |
 |----------------|------------------|------------------------|--------------|
-| 1.1.1          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
-| 1.1.1          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
-| 1.1.1          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
+| 1.1.2          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
+| 1.1.2          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
+| 1.1.2          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
 
 ## License
 MIT - see LICENSE

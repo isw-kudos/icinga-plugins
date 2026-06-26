@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-06-26
+### Added
+- Read `ibm-replicationonhold` (present on both supplier and consumer agreement
+  entries) and alert CRITICAL when an agreement is administratively on hold — the
+  reliable cross-side signal, where `ibm-replicationState` exists only on the
+  supplier side.
+### Changed
+- Peer/consumer-side agreements (no local operational status) are now reported as
+  an informational OK ("no live status on this host; verify on the supplier")
+  instead of a hollow "healthy", and no longer emit a `pending_changes=U` metric.
+### Fixed
+- Avoid an unbound-variable error under `set -u` on bash <= 4.3 when no
+  per-agreement pending perfdata is emitted.
+
 ## [1.1.1] - 2026-06-26
 ### Fixed
 - Unfold LDIF line continuations (RFC 2849) before parsing. IBM `idsldapsearch -L`

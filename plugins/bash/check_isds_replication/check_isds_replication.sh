@@ -33,7 +33,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_replication"
-PLUGIN_VERSION="1.1.1"
+PLUGIN_VERSION="1.1.2"
 
 # ---------- Defaults ----------
 HOST="127.0.0.1"
@@ -78,6 +78,11 @@ ATTR_LAST_RESULT_ADDL="ibm-replicationLastResultAdditional"
 ATTR_LAST_CHANGE_ID="ibm-replicationLastChangeId"
 # Version-dependent generalized timestamp of the last replicated change result.
 ATTR_LAST_RESULT_TIME="ibm-replicationChangeLastResultTime"
+# Administrative pause flag (TRUE/FALSE). Present on BOTH supplier and consumer
+# agreement entries, so it is the reliable cross-side "is replication paused" signal.
+ATTR_ONHOLD="ibm-replicationonhold"
+# Consumer endpoint URL, used in the informational note on consumer-side entries.
+ATTR_REPLICA_URL="ibm-replicaurl"
 
 # State values that indicate the agreement is not actively/healthily replicating.
 # Compared case-insensitively as substrings of ibm-replicationState.
@@ -418,11 +423,12 @@ fetch_agreement_dns() {
 }
 
 check_agreement() {
-    local dn=$1 cn state pending last_result last_addl last_id last_time
+    local dn=$1 cn state pending last_result last_addl last_id last_time onhold url
     local rc=0
     run_ldapsearch "$dn" base "(objectclass=*)" \
         cn "$ATTR_STATE" "$ATTR_PENDING" "$ATTR_LAST_RESULT" \
-        "$ATTR_LAST_RESULT_ADDL" "$ATTR_LAST_CHANGE_ID" "$ATTR_LAST_RESULT_TIME" || rc=$?
+        "$ATTR_LAST_RESULT_ADDL" "$ATTR_LAST_CHANGE_ID" "$ATTR_LAST_RESULT_TIME" \
+        "$ATTR_ONHOLD" "$ATTR_REPLICA_URL" || rc=$?
     local ldif="$LDAP_OUT"
 
     if [[ ${rc} -eq 124 || ${rc} -eq 137 ]]; then
@@ -447,12 +453,20 @@ check_agreement() {
     last_addl=$(ldif_get "$ldif" "$ATTR_LAST_RESULT_ADDL")
     last_id=$(ldif_get "$ldif" "$ATTR_LAST_CHANGE_ID")
     last_time=$(ldif_get "$ldif" "$ATTR_LAST_RESULT_TIME")
+    onhold=$(ldif_get "$ldif" "$ATTR_ONHOLD")
+    url=$(ldif_get "$ldif" "$ATTR_REPLICA_URL")
 
     local label; label=$(sanitize_label "$cn")
     local worst=${STATE_OK}
     local reasons=()
 
-    # --- State check ---
+    # --- On-hold check (available on both supplier and consumer entries) ---
+    if [[ "$onhold" == [Tt][Rr][Uu][Ee] ]]; then
+        worst=${STATE_CRITICAL}
+        reasons+=("agreement on hold (replication paused)")
+    fi
+
+    # --- State check (operational; only present on the supplier side) ---
     if [[ -n "$state" ]] && state_is_error "$state"; then
         worst=${STATE_CRITICAL}
         reasons+=("state '${state}'")
@@ -476,8 +490,6 @@ check_agreement() {
             (( worst < STATE_WARNING )) && worst=${STATE_WARNING}
             reasons+=("${pending} pending changes >= warn ${PENDING_WARN}")
         fi
-    else
-        PERFDATA+=("pending_changes_${label}=U")
     fi
 
     # --- Optional lag check + perfdata ---
@@ -495,20 +507,37 @@ check_agreement() {
         fi
     fi
 
+    # Does this host hold live operational status for the agreement? In a
+    # peer/master topology the status attributes are only populated on the
+    # supplier side; the consumer-side entry is config-only.
+    local has_status=0
+    if [[ -n "$state" ]] || is_number "$pending" || [[ -n "$last_id" ]]; then
+        has_status=1
+    fi
+
     # --- Tally + record ---
     local detail="agreement '${cn}'"
     [[ -n "$state" ]] && detail+=" state=${state}"
     is_number "$pending" && detail+=" pending=${pending}"
     is_number "$last_result" && detail+=" lastResult=${last_result}"
     [[ -n "$last_id" ]] && detail+=" lastChangeId=${last_id}"
+    [[ "$onhold" == [Tt][Rr][Uu][Ee] ]] && detail+=" onhold=TRUE"
 
-    if (( worst == STATE_OK )); then
-        AGREEMENTS_OK=$(( AGREEMENTS_OK + 1 ))
-        record "${STATE_OK}" "$label" "$detail - healthy"
-    else
+    if (( worst != STATE_OK )); then
         AGREEMENTS_ERROR=$(( AGREEMENTS_ERROR + 1 ))
         local why; why=$(IFS='; '; printf '%s' "${reasons[*]}")
         record "$worst" "$label" "$detail - ${why}"
+    elif (( has_status )); then
+        AGREEMENTS_OK=$(( AGREEMENTS_OK + 1 ))
+        record "${STATE_OK}" "$label" "$detail - healthy"
+    else
+        # Consumer-side entry: no live status on this host. Report informationally
+        # rather than a hollow "healthy"; verify this direction on the supplier.
+        AGREEMENTS_OK=$(( AGREEMENTS_OK + 1 ))
+        local note="no live status on this host"
+        [[ -n "$url" ]] && note+=" (supplied via ${url})"
+        note+="; verify this direction on the supplier"
+        record "${STATE_OK}" "$label" "$detail - ${note}"
     fi
 }
 
@@ -525,7 +554,7 @@ if [[ -n "$BASE" ]] && fetch_agreement_dns; then
         if (( ${#SUMMARY[@]} == 0 )); then
             record "${STATE_UNKNOWN}" "replication" "no agreements matched the requested --agreement filter(s)"
         fi
-        PERFDATA=("agreements_ok=${AGREEMENTS_OK}" "agreements_error=${AGREEMENTS_ERROR}" "${PERFDATA[@]}")
+        PERFDATA=("agreements_ok=${AGREEMENTS_OK}" "agreements_error=${AGREEMENTS_ERROR}" ${PERFDATA[@]+"${PERFDATA[@]}"})
     fi
 fi
 
