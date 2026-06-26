@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-26
+### Fixed
+- Corrected `cn=monitor` cache attribute names for SDS / ISVD 10.x: derive the
+  hit ratio from `*_hit`/`*_miss` (`hit/(hit+miss)`) instead of the non-existent
+  `*_hits`/`*_tries`. ACL cache dropped (the server exposes no hit/miss for it).
+- Throughput: use `searchescompleted` (was `searchcompleted`) so the
+  `searches_completed` counter is emitted again.
+### Changed
+- Cache hit-ratio alerting is now opt-in (default off). Filter caches legitimately
+  run a low hit ratio, so ratios are emitted as perfdata and only alert when
+  `--cache-warn`/`--cache-crit` are set.
+
 ## [1.1.0] - 2026-06-26
 ### Added
 - Support for IBM `idsldapsearch` flag syntax (`-h/-p/-L/-w`) in addition to
