@@ -17,7 +17,7 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | [check_isds_monitor](plugins/bash/check_isds_monitor) | Bash | Checks IBM Security Directory Server cn=monitor (worker pool, connections, throughput, cache hit ratios) | 1.1.2 | Stable |
 | [check_isds_replication](plugins/bash/check_isds_replication) | Bash | Checks IBM Security Directory Server replication agreement state and pending-change backlog | 1.1.2 | Stable |
 | [check_isds_backend](plugins/bash/check_isds_backend) | Bash | Checks IBM Security Directory Server process liveness and DB2 backend (tablespace/log usage) | 1.0.2 | Stable |
-| [check_isds_cert](plugins/bash/check_isds_cert) | Bash | Checks IBM Security Directory Server GSKit keystore (.kdb) TLS certificate expiry | 1.0.0 | Stable |
+| [check_isds_cert](plugins/bash/check_isds_cert) | Bash | Checks IBM Security Directory Server GSKit keystore (.kdb) TLS certificate expiry | 1.1.0 | Stable |
 
 ## Compatibility
 

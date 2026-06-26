@@ -10,10 +10,15 @@
 ## Requirements
 - Icinga 2 >= 2.13.0
 - Bash >= 4.x
-- A GSKit CMS cert tool in `PATH` on the SDS host: `gsk8capicmd_64` (preferred),
-  `gsk8capicmd`, or `idsgskcapicmd`
+- A GSKit CMS cert tool (`gsk8capicmd_64` preferred, `gsk8capicmd`, or
+  `idsgskcapicmd`). The plugin auto-locates it on `PATH` and under common GSKit
+  install dirs — commonly the DB2-bundled
+  `/opt/db2/<ver>/gskit/bin/gsk8capicmd_64` — and sets `LD_LIBRARY_PATH` for the
+  matching GSKit libs, so the Icinga user does not need it on `PATH`. Use
+  `--gsk-bin PATH` to override.
 - GNU `date` (standard on the SDS Linux host)
-- Read access for the Icinga user to the `.kdb`, the `.sth` stash, and the gsk binary
+- The `.kdb` keystore and the `.sth` stash must be readable by the Icinga user
+  (both are commonly world-readable)
 
 This check runs **locally on the SDS host** (via the Icinga 2 agent on that host),
 because it reads the keystore from disk with the GSKit tool.
@@ -30,15 +35,18 @@ The actual filenames are whatever the `ibm-slapdSslKeyDatabase` /
 `ibm-slapdSslKeyDatabasePW` (stash) attributes in `ibmslapd.conf` point to. Check
 that file if unsure.
 
-The GSKit binary is usually under the SDS install, e.g.:
+The GSKit binary is usually under the DB2/SDS install, e.g.:
 
 ```
-/opt/IBM/ldap/V6.4/bin/gsk8capicmd_64
+/opt/db2/V11.5/gskit/bin/gsk8capicmd_64
+/opt/IBM/ldap/V10.0.3/bin/gsk8capicmd_64
 /opt/ibm/ldap/<ver>/bin/idsgskcapicmd
 ```
 
-Either add that `bin` directory to the Icinga user's `PATH`, or symlink the gsk
-binary into a directory already on `PATH`.
+The plugin auto-locates it on `PATH` and under common GSKit dirs
+(`/opt/db2/*/gskit/bin`, `/usr/local/ibm/gsk8_64/bin`, `/opt/ibm/gsk8_64/bin`,
+`/opt/IBM/ldap/*/bin`) and sets `LD_LIBRARY_PATH` for the GSKit libs, so no `PATH`
+change is needed. If it lives elsewhere, pass `--gsk-bin /absolute/path/to/binary`.
 
 ### File access
 The Icinga user that executes the check must be able to **read** the keystore and
@@ -84,8 +92,8 @@ object Host "ldap01.example.com" {
   import "generic-host"
   address = "10.0.0.10"
   vars.isds = true
-  vars.isds_cert_kdb   = "/home/dsrdbm01/idsslapd-dsrdbm01/etc/serverkey.kdb"
-  vars.isds_cert_stash = "/home/dsrdbm01/idsslapd-dsrdbm01/etc/serverkey.sth"
+  vars.isds_cert_kdb   = "/data/idsldap/ssl/keystore.kdb"
+  vars.isds_cert_stash = "/data/idsldap/ssl/keystore.sth"
 }
 ```
 
@@ -103,15 +111,17 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 1. Director > Commands > External Commands > **+ Add**
 2. Name: `check_isds_cert`, Command: `$USER1$/check_isds_cert`
 3. Arguments tab — add each argument below. *Type* is the Director value type and
-   *Required* mirrors the CheckCommand. None of these arguments use a repeat key or
-   skip key:
+   *Required* mirrors the CheckCommand. Only `--all-certs` uses a skip key
+   (`set_if`); none use a repeat key:
 
    | Argument   | Value                  | Type   | Required | Repeat key | Skip key | Description                                     |
    |------------|------------------------|--------|----------|------------|----------|-------------------------------------------------|
    | --kdb      | `$isds_cert_kdb$`      | String | **Yes**  | No         | —        | Path to the GSKit CMS keystore (.kdb)           |
    | --stash    | `$isds_cert_stash$`    | String | No       | No         | —        | Path to the .sth stash file (preferred)         |
    | --password | `$isds_cert_password$` | String | No       | No         | —        | Keystore password (discouraged - visible in ps) |
-   | --label    | `$isds_cert_label$`    | String | No       | No         | —        | Check only this cert label (default: all certs) |
+   | --label     | `$isds_cert_label$`     | String  | No       | No         | —                       | Check only this cert label (default: all personal certs) |
+   | --all-certs | —                       | Boolean | No       | No         | `$isds_cert_all_certs$` | Check all certs incl. CA roots (default: personal only)  |
+   | --gsk-bin   | `$isds_cert_gsk_bin$`   | String  | No       | No         | —                       | Path to the GSKit cert tool (auto-located if unset)      |
    | -w         | `$isds_cert_warn$`     | Number | No       | No         | —        | Warn when a cert expires within DAYS days       |
    | -c         | `$isds_cert_crit$`     | Number | No       | No         | —        | Crit when a cert expires within DAYS days       |
    | -t         | `$isds_cert_timeout$`  | Number | No       | No         | —        | Timeout in seconds (default 30)                 |
@@ -135,13 +145,13 @@ secrets-store integration, never a command-line default.
 
 ```
 /usr/lib64/nagios/plugins/check_isds_cert \
-  --kdb /home/dsrdbm01/idsslapd-dsrdbm01/etc/serverkey.kdb \
-  --stash /home/dsrdbm01/idsslapd-dsrdbm01/etc/serverkey.sth
+  --kdb /data/idsldap/ssl/keystore.kdb \
+  --stash /data/idsldap/ssl/keystore.sth
 ```
 
 Expected (healthy keystore):
 ```
-check_isds_cert OK - server_cert=OK soonest=OK | days_until_expiry_server_cert=512;30:;7:;; min_days_until_expiry=512;30:;7:;;
+check_isds_cert OK - ldap_ams_cloud=OK soonest=OK | days_until_expiry_ldap_ams_cloud=5264;30:;7:;; min_days_until_expiry=5264;30:;7:;;
 ```
 
 If a cert returns `UNKNOWN - could not find expiry date`, your GSKit version labels

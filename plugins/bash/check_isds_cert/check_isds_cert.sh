@@ -25,13 +25,20 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_cert"
-PLUGIN_VERSION="1.0.0"
+PLUGIN_VERSION="1.1.0"
 
 # ---------- Defaults ----------
 KDB=""
 STASH=""
 PASSWORD=""
 LABEL=""
+# By default only PERSONAL certs (those with a private key - what the server
+# actually presents) are checked. A keystore usually also holds the bundled CA
+# roots, several of which may be long expired; --all-certs opts into those too.
+CHECK_ALL_CERTS=0
+# --gsk-bin: absolute path to the GSKit cert tool (else searched on PATH and under
+# common GSKit install dirs).
+GSK_OVERRIDE=""
 
 WARN_DAYS=30
 CRIT_DAYS=7
@@ -63,9 +70,12 @@ Keystore:
   --kdb PATH             Path to the GSKit CMS keystore (.kdb) (required)
   --stash PATH           Path to the .sth stash file (preferred; uses -stashed)
   --password PW          Keystore password (DISCOURAGED - visible in process list)
-  --label LABEL          Check only this certificate label. If omitted, ALL certs
-                         in the keystore are checked and the soonest to expire is
-                         reported.
+  --label LABEL          Check only this certificate label. If omitted, all
+                         PERSONAL certs are checked and the soonest is reported.
+  --all-certs            Check every cert incl. trusted CA roots (default: personal
+                         certs only, so expired bundled CA roots do not alert).
+  --gsk-bin PATH         Path to gsk8capicmd_64/idsgskcapicmd (else searched on PATH
+                         and under /opt/db2/*/gskit/bin, /usr/local/ibm/gsk8*/bin, …)
 
 Thresholds:
   -w DAYS                Warn when a cert expires within DAYS days (default: ${WARN_DAYS})
@@ -86,6 +96,8 @@ while [[ $# -gt 0 ]]; do
         --stash) STASH="$2"; shift 2 ;;
         --password) PASSWORD="$2"; shift 2 ;;
         --label) LABEL="$2"; shift 2 ;;
+        --all-certs) CHECK_ALL_CERTS=1; shift ;;
+        --gsk-bin) GSK_OVERRIDE="$2"; shift 2 ;;
         -w) WARN_DAYS="$2"; shift 2 ;;
         -c) CRIT_DAYS="$2"; shift 2 ;;
         -t) TIMEOUT="$2"; shift 2 ;;
@@ -114,16 +126,31 @@ record() {
     escalate "$lvl"
 }
 
-# Locate the GSKit CMS cert tool: prefer the 64-bit capicmd, then 32-bit, then the
-# SDS-bundled idsgskcapicmd wrapper.
+# Locate the GSKit CMS cert tool. Honors --gsk-bin; otherwise searches PATH then
+# common GSKit install dirs (it is usually off the icinga user's PATH - e.g. the
+# DB2-bundled GSKit under /opt/db2/*/gskit/bin).
 GSK_BIN=""
 find_gsk() {
-    local c
+    if [[ -n "$GSK_OVERRIDE" ]]; then
+        if [[ -x "$GSK_OVERRIDE" ]]; then
+            GSK_BIN="$GSK_OVERRIDE"
+        elif command -v "$GSK_OVERRIDE" >/dev/null 2>&1; then
+            GSK_BIN=$(command -v "$GSK_OVERRIDE")
+        else
+            return 1
+        fi
+        return 0
+    fi
+    local c d
     for c in gsk8capicmd_64 gsk8capicmd idsgskcapicmd; do
         if command -v "$c" >/dev/null 2>&1; then
-            GSK_BIN="$c"
-            return 0
+            GSK_BIN=$(command -v "$c"); return 0
         fi
+    done
+    for d in /opt/db2/*/gskit/bin /usr/local/ibm/gsk8_64/bin /usr/local/ibm/gsk8/bin \
+             /opt/ibm/gsk8_64/bin /opt/IBM/ldap/*/bin; do
+        if [[ -x "$d/gsk8capicmd_64" ]]; then GSK_BIN="$d/gsk8capicmd_64"; return 0; fi
+        if [[ -x "$d/gsk8capicmd" ]]; then GSK_BIN="$d/gsk8capicmd"; return 0; fi
     done
     return 1
 }
@@ -133,6 +160,8 @@ find_gsk() {
 # sets global GSK_OUT to combined stdout/stderr, and returns the tool exit code.
 # Must NOT be called via command substitution, or GSK_OUT would be set in a
 # subshell and the return code would be that of the substitution, not the tool.
+# Sets LD_LIBRARY_PATH to the tool's GSKit lib dir so it resolves when the binary
+# is off-PATH and the icinga user lacks the GSKit ld.so config.
 GSK_OUT=""
 run_gsk() {
     local args=("$@")
@@ -145,8 +174,17 @@ run_gsk() {
         args+=(-stashed)
     fi
 
+    local root envp=()
+    root=$(dirname "$(dirname "$GSK_BIN")")
+    if [[ -d "$root/lib64" ]]; then
+        envp=(env "LD_LIBRARY_PATH=$root/lib64:${LD_LIBRARY_PATH:-}")
+    elif [[ -d "$root/lib" ]]; then
+        envp=(env "LD_LIBRARY_PATH=$root/lib:${LD_LIBRARY_PATH:-}")
+    fi
+
     local rc=0
-    GSK_OUT=$(timeout --kill-after=2 "$TIMEOUT" "$GSK_BIN" "${args[@]}" 2>&1) || rc=$?
+    GSK_OUT=$(timeout --kill-after=2 "$TIMEOUT" \
+        ${envp[@]+"${envp[@]}"} "$GSK_BIN" "${args[@]}" 2>&1) || rc=$?
     return "$rc"
 }
 
@@ -159,14 +197,42 @@ sanitize() {
     printf '%s' "$s"
 }
 
-# parse_labels <gsk -cert -list output> -> one label per line
-# `gsk*capicmd -cert -list` prints a header then indented lines, one per cert
-# label. Some builds prefix entries with a "*" marker for the default cert; we
-# strip leading markers/whitespace and skip the header line(s).
+# parse_labels <gsk -cert -list output> <mode> -> one cert label per line.
+# `gsk*capicmd -cert -list` prints a legend then one line per cert:
+#   <flags>\t"<label>"   where flags are from: * default, - personal, ! trusted,
+#   # secret key (and combinations, e.g. *- for the default personal cert).
+# The label is quoted (and may itself contain '-'), so we take the text between
+# the first and last double-quote, and read the flags from before the first quote.
+# mode "personal" keeps only certs whose flags contain '-'; mode "all" keeps every
+# quoted entry. Lines without a quoted label (legend / "Certificates found") are
+# skipped.
 parse_labels() {
-    printf '%s\n' "$1" | sed -n 's/^[[:space:]]*[*!-]\{0,1\}[[:space:]]*//p' \
-        | grep -v -i -E '^(certificates|certificate|keys?)[[:space:]]+(found|in)' \
-        | grep -v -E '^[[:space:]]*$' || true
+    printf '%s\n' "$1" | awk -v mode="$2" '
+        {
+            s = index($0, "\"")
+            if (s == 0) next
+            e = length($0)
+            while (e > s && substr($0, e, 1) != "\"") e--
+            if (e <= s) next
+            flags = substr($0, 1, s - 1)
+            label = substr($0, s + 1, e - s - 1)
+            if (label == "") next
+            if (mode == "all" || index(flags, "-") > 0) print label
+        }'
+}
+
+# gsk_date_to_epoch <gsk date string> -> epoch seconds (stdout), or non-zero.
+# GSKit -cert -details prints e.g. "2040 11 24 10:41:54 GMT+01:00": space-separated
+# YYYY M D (no zero-padding) HH:MM:SS [tz]. Reformat to ISO for GNU `date`. The tz
+# is ignored - irrelevant at day granularity. Returns non-zero if not that shape
+# (so the caller can fall back to feeding the raw string to `date -d`).
+gsk_date_to_epoch() {
+    local y mo d t
+    read -r y mo d t _ <<<"$1"
+    [[ "$y" =~ ^[0-9]{4}$ && "$mo" =~ ^[0-9]{1,2}$ && "$d" =~ ^[0-9]{1,2}$ ]] || return 1
+    local iso
+    printf -v iso '%04d-%02d-%02d %s' "$y" "$mo" "$d" "${t:-00:00:00}"
+    date -d "$iso" +%s 2>/dev/null
 }
 
 # extract_not_after <gsk -cert -details output> -> raw date string after the label
@@ -210,10 +276,14 @@ check_label() {
     fi
 
     local exp_epoch now_epoch days
-    if ! exp_epoch=$(date -d "$raw_date" +%s 2>/dev/null); then
-        record "${STATE_UNKNOWN}" "${key}" "could not parse expiry date '${raw_date}' for label '${label}'"
-        PERFDATA+=("days_until_expiry_${key}=U")
-        return
+    # GSKit's "YYYY M D HH:MM:SS" format first; fall back to whatever `date -d`
+    # understands for other GSKit builds.
+    if ! exp_epoch=$(gsk_date_to_epoch "$raw_date") || [[ -z "$exp_epoch" ]]; then
+        if ! exp_epoch=$(date -d "$raw_date" +%s 2>/dev/null); then
+            record "${STATE_UNKNOWN}" "${key}" "could not parse expiry date '${raw_date}' for label '${label}'"
+            PERFDATA+=("days_until_expiry_${key}=U")
+            return
+        fi
     fi
     now_epoch=$(date +%s)
     days=$(( (exp_epoch - now_epoch) / 86400 ))
@@ -272,12 +342,18 @@ main() {
             record "${STATE_UNKNOWN}" "cert" "gsk -cert -list failed (rc=${rc}): $(printf '%s' "$GSK_OUT" | tail -n1)"
             return
         fi
+        local mode="personal"
+        (( CHECK_ALL_CERTS )) && mode="all"
         local line
         while IFS= read -r line; do
             [[ -n "$line" ]] && labels+=("$line")
-        done < <(parse_labels "$GSK_OUT")
+        done < <(parse_labels "$GSK_OUT" "$mode")
         if [[ ${#labels[@]} -eq 0 ]]; then
-            record "${STATE_UNKNOWN}" "cert" "no certificate labels found in keystore ${KDB}"
+            if [[ "$mode" == "personal" ]]; then
+                record "${STATE_UNKNOWN}" "cert" "no personal certificate found in keystore ${KDB} (use --label or --all-certs)"
+            else
+                record "${STATE_UNKNOWN}" "cert" "no certificate labels found in keystore ${KDB}"
+            fi
             return
         fi
     fi
