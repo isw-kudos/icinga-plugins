@@ -15,7 +15,8 @@
 #   2. connections - current connections vs an optional configured maximum.
 #   3. throughput  - ops/search/bind counters emitted as perfdata counters (c)
 #                    for rate graphing. No thresholds (informational).
-#   4. cache       - entry/filter/ACL/group cache hit ratios; warn on low ratio.
+#   4. cache       - entry/filter/group cache hit ratios (informational; opt in
+#                    to alerting with --cache-warn/--cache-crit).
 #
 # Designed to run locally on the SDS host using the bundled idsldapsearch, but
 # falls back to a standard ldapsearch and works remotely too.
@@ -30,7 +31,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_monitor"
-PLUGIN_VERSION="1.1.0"
+PLUGIN_VERSION="1.1.1"
 
 # ---------- Defaults ----------
 HOST="127.0.0.1"
@@ -56,9 +57,11 @@ WORKERS_CRIT=1
 # Connection thresholds (alert when CURRENT connections climb high); empty = off
 CONN_WARN=""
 CONN_CRIT=""
-# Cache hit-ratio thresholds in percent (alert when ratio drops low)
-CACHE_WARN=80
-CACHE_CRIT=50
+# Cache hit-ratio thresholds in percent (alert when ratio drops low); empty = off.
+# Off by default: filter caches legitimately run a low hit ratio on healthy
+# servers, so cache ratios are informational (perfdata) unless you opt in.
+CACHE_WARN=""
+CACHE_CRIT=""
 
 TIMEOUT=30
 
@@ -76,16 +79,18 @@ ATTR_TOTAL_CONNECTIONS="totalconnections"
 THROUGHPUT_ATTRS=(
     "ops_completed:opscompleted"
     "ops_initiated:opsinitiated"
-    "searches_completed:searchcompleted"
+    "searches_completed:searchescompleted"
     "binds_completed:bindscompleted"
     "entries_sent:entriessent"
 )
-# Cache hit-ratio sources: label:hits_attr:tries_attr
+# Cache hit-ratio sources: label:hit_attr:miss_attr (ratio = hit/(hit+miss)).
+# SDS/ISVD expose hit + miss counters; the hit ratio is derived. ACL cache is
+# omitted because the server only reports acl_cache=TRUE/acl_cache_size (no
+# hit/miss). Adjust these names if your SDS version differs.
 CACHE_ATTRS=(
-    "entry_cache:entry_cache_hits:entry_cache_tries"
-    "filter_cache:filter_cache_hits:filter_cache_tries"
-    "acl_cache:acl_cache_hits:acl_cache_tries"
-    "group_cache:group_members_cache_hits:group_members_cache_tries"
+    "entry_cache:entry_cache_hit:entry_cache_miss"
+    "filter_cache:filter_cache_hit:filter_cache_miss"
+    "group_cache:group_members_cache_hit:group_members_cache_miss"
 )
 
 STATE_OK=0
@@ -124,8 +129,8 @@ Thresholds:
   --workers-crit N       Crit when available workers <= N (default: ${WORKERS_CRIT})
   --conn-warn N          Warn when current connections >= N (default: off)
   --conn-crit N          Crit when current connections >= N (default: off)
-  --cache-warn PCT       Warn when a cache hit ratio < PCT% (default: ${CACHE_WARN})
-  --cache-crit PCT       Crit when a cache hit ratio < PCT% (default: ${CACHE_CRIT})
+  --cache-warn PCT       Warn when a cache hit ratio < PCT% (default: off)
+  --cache-crit PCT       Crit when a cache hit ratio < PCT% (default: off)
 
 Sub-check toggles:
   --no-workers           Disable worker pool check
@@ -404,33 +409,38 @@ check_throughput() {
 }
 
 check_cache() {
-    local worst=${STATE_OK} any=0 triple label hits_attr tries_attr hits tries ratio low=()
+    local worst=${STATE_OK} any=0 triple label hit_attr miss_attr hit miss total ratio low=()
     for triple in "${CACHE_ATTRS[@]}"; do
         label="${triple%%:*}"
         local rest="${triple#*:}"
-        hits_attr="${rest%%:*}"
-        tries_attr="${rest##*:}"
-        hits=$(ldif_get "$MONITOR_LDIF" "$hits_attr")
-        tries=$(ldif_get "$MONITOR_LDIF" "$tries_attr")
-        if ! is_number "$hits" || ! is_number "$tries" || (( tries == 0 )); then
+        hit_attr="${rest%%:*}"
+        miss_attr="${rest##*:}"
+        hit=$(ldif_get "$MONITOR_LDIF" "$hit_attr")
+        miss=$(ldif_get "$MONITOR_LDIF" "$miss_attr")
+        if ! is_number "$hit" || ! is_number "$miss"; then
             continue
         fi
+        total=$(( hit + miss ))
+        (( total == 0 )) && continue
         any=1
-        ratio=$(( hits * 100 / tries ))
-        PERFDATA+=("${label}_hit_ratio=${ratio}%;${CACHE_WARN}:;${CACHE_CRIT}:;0;100")
-        if (( ratio < CACHE_CRIT )); then
+        ratio=$(( hit * 100 / total ))
+        local pw="" pc=""
+        is_number "$CACHE_WARN" && pw="${CACHE_WARN}:"
+        is_number "$CACHE_CRIT" && pc="${CACHE_CRIT}:"
+        PERFDATA+=("${label}_hit_ratio=${ratio}%;${pw};${pc};0;100")
+        if is_number "$CACHE_CRIT" && (( ratio < CACHE_CRIT )); then
             low+=("${label} ${ratio}%"); worst=${STATE_CRITICAL}
-        elif (( ratio < CACHE_WARN )); then
+        elif is_number "$CACHE_WARN" && (( ratio < CACHE_WARN )); then
             low+=("${label} ${ratio}%"); (( worst < STATE_WARNING )) && worst=${STATE_WARNING}
         fi
     done
 
     if (( ! any )); then
-        record "${STATE_UNKNOWN}" "cache" "no cache hit/try counters found in cn=monitor"
+        record "${STATE_UNKNOWN}" "cache" "no cache hit/miss counters found in cn=monitor"
         return
     fi
     if (( worst == STATE_OK )); then
-        record "${STATE_OK}" "cache" "cache hit ratios healthy"
+        record "${STATE_OK}" "cache" "cache hit ratios collected"
     else
         record "$worst" "cache" "low cache hit ratio: ${low[*]}"
     fi

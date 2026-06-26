@@ -12,7 +12,7 @@ Four sub-checks (all enabled by default, individually toggleable):
 | `workers`     | Worker thread pool exhaustion. Available workers at zero = server hung even though the LDAP port still accepts connections. |
 | `connections` | Current connection count climbing toward a configured maximum.            |
 | `throughput`  | Operation/search/bind counters, emitted as perfdata counters for rate graphing (informational, no thresholds). |
-| `cache`       | Entry / filter / ACL / group-members cache hit ratios dropping low.       |
+| `cache`       | Entry / filter / group-members cache hit ratios (informational by default — opt in to alerting with `--cache-warn`/`--cache-crit`). |
 
 ## Requirements
 - Icinga 2 >= 2.13.0
@@ -129,8 +129,8 @@ check_isds_monitor [-H host] [-p port] [--ldaps|-Z] [-D binddn] [-y passfile] \
 | --workers-crit    | No       | 1           | Crit when available workers <= N                  |
 | --conn-warn       | No       | (off)       | Warn when current connections >= N                |
 | --conn-crit       | No       | (off)       | Crit when current connections >= N                |
-| --cache-warn      | No       | 80          | Warn when a cache hit ratio < PCT%                |
-| --cache-crit      | No       | 50          | Crit when a cache hit ratio < PCT%                |
+| --cache-warn      | No       | (off)       | Warn when a cache hit ratio < PCT%                |
+| --cache-crit      | No       | (off)       | Crit when a cache hit ratio < PCT%                |
 | --no-workers      | No       |             | Disable the worker pool sub-check                 |
 | --no-connections  | No       |             | Disable the connection count sub-check            |
 | --no-throughput   | No       |             | Disable throughput counters                       |
@@ -141,22 +141,27 @@ check_isds_monitor [-H host] [-p port] [--ldaps|-Z] [-D binddn] [-y passfile] \
 
 ## Example Output
 ```
-check_isds_monitor OK - workers=OK connections=OK throughput=OK cache=OK | available_workers=14;2:;1:;0;16 total_workers=16 current_connections=37;;;0; total_connections=204815c ops_completed=9912034c searches_completed=8801221c entry_cache_hit_ratio=98%;80:;50:;0;100 filter_cache_hit_ratio=91%;80:;50:;0;100
-[OK] available workers 14/16
-[OK] 37 current connections
+check_isds_monitor OK - workers=OK connections=OK throughput=OK cache=OK | available_workers=44;2:;1:;0; current_connections=45;;;0; total_connections=3642568c ops_completed=401351c searches_completed=96909c binds_completed=151353c entries_sent=103524c entry_cache_hit_ratio=96%;;;0;100 filter_cache_hit_ratio=40%;;;0;100 group_cache_hit_ratio=90%;;;0;100
+[OK] available workers 44
+[OK] 45 current connections
 [OK] operation counters collected
-[OK] cache hit ratios healthy
+[OK] cache hit ratios collected
 ```
 
 ## Known Limitations
 - `cn=monitor` attribute names differ slightly across SDS / ISVD versions. If a
   sub-check reports an attribute as "not found", adjust the attribute names in the
-  *Attribute names* block near the top of the script. Defaults target classic SDS
-  (`available_workers`, `total_workers`, `currentconnections`, `opscompleted`, …).
+  *Attribute names* block near the top of the script. Defaults target SDS / ISVD
+  10.x (`available_workers`, `currentconnections`, `opscompleted`,
+  `searchescompleted`, `entry_cache_hit`/`entry_cache_miss`, …). Some attributes do
+  not exist on every version: e.g. ISVD 10.x exposes no `total_workers` (so no max
+  on `available_workers`) and no ACL-cache hit/miss counters.
 - Throughput values are raw cumulative counters; meaningful rates require Icinga to
   graph the `c` (counter) perfdata over time.
-- Cache hit ratios are computed from cumulative hits/tries since server start, so a
-  freshly restarted server may briefly show a low ratio.
+- Cache hit ratios are derived from cumulative `*_hit`/`*_miss` counters since
+  server start, so a freshly restarted server may briefly show a low ratio. Filter
+  caches in particular legitimately run a low hit ratio, which is why cache
+  alerting is off by default — opt in per cache need with `--cache-warn`/`--cache-crit`.
 - With the IBM `idsldapsearch` client there is no password-file flag, so when you
   pass `-y FILE` the plugin reads the file and supplies the password via `-w`, which
   is briefly visible in the process list (`ps`). The OpenLDAP `ldapsearch` client
@@ -167,9 +172,9 @@ check_isds_monitor OK - workers=OK connections=OK throughput=OK cache=OK | avail
 
 | Plugin Version | Icinga 2 Version | OS                     | Lang Version |
 |----------------|------------------|------------------------|--------------|
-| 1.1.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
-| 1.1.0          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
-| 1.1.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
+| 1.1.1          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
+| 1.1.1          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
+| 1.1.1          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
 
 ## License
 MIT - see LICENSE
