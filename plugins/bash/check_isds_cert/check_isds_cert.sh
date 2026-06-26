@@ -25,7 +25,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_cert"
-PLUGIN_VERSION="1.1.0"
+PLUGIN_VERSION="1.1.1"
 
 # ---------- Defaults ----------
 KDB=""
@@ -197,27 +197,29 @@ sanitize() {
     printf '%s' "$s"
 }
 
-# parse_labels <gsk -cert -list output> <mode> -> one cert label per line.
-# `gsk*capicmd -cert -list` prints a legend then one line per cert:
-#   <flags>\t"<label>"   where flags are from: * default, - personal, ! trusted,
-#   # secret key (and combinations, e.g. *- for the default personal cert).
-# The label is quoted (and may itself contain '-'), so we take the text between
-# the first and last double-quote, and read the flags from before the first quote.
-# mode "personal" keeps only certs whose flags contain '-'; mode "all" keeps every
-# quoted entry. Lines without a quoted label (legend / "Certificates found") are
-# skipped.
+# parse_labels <gsk -cert -list output> -> one cert label per line.
+# `gsk*capicmd -cert -list <type>` prints a header + legend then one line per cert:
+#   <flags>\t<label>     where flags are from: * default, - personal, ! trusted,
+#   # secret key. The label is bare when it has no spaces (e.g. ldap.ams.cloud) and
+#   double-quoted when it contains spaces (e.g. CA names). Personal/CA filtering is
+#   done by the gsk `-cert -list personal|all` type, so this just extracts labels:
+#   strip the leading flags + whitespace, then unwrap surrounding quotes if present.
+#   The header ("Certificates found") and legend line are skipped.
 parse_labels() {
-    printf '%s\n' "$1" | awk -v mode="$2" '
+    printf '%s\n' "$1" | awk '
+        /^Certificates found/        { next }
+        /personal,[[:space:]]*!?[[:space:]]*trusted/ { next }   # legend line
         {
-            s = index($0, "\"")
-            if (s == 0) next
-            e = length($0)
-            while (e > s && substr($0, e, 1) != "\"") e--
-            if (e <= s) next
-            flags = substr($0, 1, s - 1)
-            label = substr($0, s + 1, e - s - 1)
-            if (label == "") next
-            if (mode == "all" || index(flags, "-") > 0) print label
+            line = $0
+            sub(/^[[:space:]]*[*!#-]+[[:space:]]+/, "", line)   # drop leading flags
+            sub(/[[:space:]]+$/, "", line)
+            if (line == "") next
+            if (substr(line, 1, 1) == "\"") {
+                line = substr(line, 2)
+                q = index(line, "\"")
+                if (q > 0) line = substr(line, 1, q - 1)
+            }
+            if (line != "") print line
         }'
 }
 
@@ -332,8 +334,12 @@ main() {
     if [[ -n "$LABEL" ]]; then
         labels=("$LABEL")
     else
+        # Let GSKit filter by cert type: "personal" (default - the certs the server
+        # presents) or "all" (incl. trusted CA roots) with --all-certs.
+        local list_type="personal"
+        (( CHECK_ALL_CERTS )) && list_type="all"
         local rc=0
-        run_gsk -cert -list || rc=$?
+        run_gsk -cert -list "$list_type" || rc=$?
         if [[ ${rc} -eq 124 || ${rc} -eq 137 ]]; then
             record "${STATE_CRITICAL}" "cert" "gsk -cert -list timed out after ${TIMEOUT}s"
             return
@@ -342,14 +348,12 @@ main() {
             record "${STATE_UNKNOWN}" "cert" "gsk -cert -list failed (rc=${rc}): $(printf '%s' "$GSK_OUT" | tail -n1)"
             return
         fi
-        local mode="personal"
-        (( CHECK_ALL_CERTS )) && mode="all"
         local line
         while IFS= read -r line; do
             [[ -n "$line" ]] && labels+=("$line")
-        done < <(parse_labels "$GSK_OUT" "$mode")
+        done < <(parse_labels "$GSK_OUT")
         if [[ ${#labels[@]} -eq 0 ]]; then
-            if [[ "$mode" == "personal" ]]; then
+            if [[ "$list_type" == "personal" ]]; then
                 record "${STATE_UNKNOWN}" "cert" "no personal certificate found in keystore ${KDB} (use --label or --all-certs)"
             else
                 record "${STATE_UNKNOWN}" "cert" "no certificate labels found in keystore ${KDB}"

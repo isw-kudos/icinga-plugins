@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-26
+### Fixed
+- Parse cert labels from `gsk -cert -list` whether printed **bare** (labels without
+  spaces, e.g. `ldap.ams.cloud`) or double-quoted (labels with spaces). Previously
+  only quoted labels were recognised, so a keystore whose personal cert label has no
+  spaces reported "no personal certificate found".
+- Select personal vs all certs via GSKit's own `-cert -list personal|all` type filter
+  instead of parsing the `* - ! #` flag markers — more robust, and correctly includes
+  the default cert (flagged `*-`).
+
 ## [1.1.0] - 2026-06-26
 ### Added
 - Auto-locate the GSKit cert tool under common install dirs (e.g. `/opt/db2/*/gskit/bin`) in addition to PATH, with a `--gsk-bin` override and an LD_LIBRARY_PATH for the GSKit libs - so it works off the icinga user's PATH.
