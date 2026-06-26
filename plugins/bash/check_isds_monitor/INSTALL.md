@@ -10,8 +10,11 @@
 ## Requirements
 - Icinga 2 >= 2.13.0
 - Bash >= 4.x
-- An LDAP search client in `PATH` on the executing node: the SDS-bundled
-  `idsldapsearch` (preferred) or a standard `ldapsearch`
+- An LDAP search client: the SDS-bundled `idsldapsearch` or OpenLDAP `ldapsearch`.
+  Both are fully supported — the plugin auto-detects the flag syntax and
+  auto-locates `idsldapsearch` under `/opt/*/ldap/*/bin`, so the icinga user does
+  **not** need the SDS `bin` on its `PATH` (override with `--ldapsearch-bin` if your
+  install lives elsewhere). OpenLDAP `ldapsearch` (`openldap-clients`) also works.
 - A bind account permitted to read `cn=monitor`
 
 ### Monitor account
@@ -88,6 +91,10 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
    | -Z              | (none)                        | Boolean | No       | No         | `$isds_monitor_starttls$` | Use StartTLS on the plain port             |
    | -D              | `$isds_monitor_binddn$`       | String  | No       | No         | —                         | Bind DN (read-only monitor account)        |
    | -y              | `$isds_monitor_passfile$`     | String  | No       | No         | —                         | File containing the bind password          |
+   | --ldapsearch-bin | `$isds_monitor_ldapsearch_bin$` | String | No     | No         | —                         | Absolute path to idsldapsearch/ldapsearch (auto-detected if unset) |
+   | --ldap-flavor   | `$isds_monitor_ldap_flavor$`  | String  | No       | No         | —                         | Force ibm or openldap flag syntax (auto-detected if unset) |
+   | --key-file      | `$isds_monitor_key_file$`     | String  | No       | No         | —                         | IBM SSL key database (.kdb) for --ldaps    |
+   | --key-pw        | `$isds_monitor_key_pw$`       | String  | No       | No         | —                         | IBM SSL key database password/stash for --ldaps |
    | --monitor-base  | `$isds_monitor_base$`         | String  | No       | No         | —                         | Monitor search base (default cn=monitor)   |
    | --workers-warn  | `$isds_monitor_workers_warn$` | Number  | No       | No         | —                         | Warn when available workers <= N           |
    | --workers-crit  | `$isds_monitor_workers_crit$` | Number  | No       | No         | —                         | Crit when available workers <= N           |

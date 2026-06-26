@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-26
+### Added
+- Support for IBM `idsldapsearch` flag syntax (`-h/-p/-L/-w`) in addition to
+  OpenLDAP `ldapsearch` (`-H/-x/-LLL/-y`), auto-detected by client flavor
+- Auto-location of the SDS client under `/opt/*/ldap/*/bin` when not on PATH
+- New options: `--ldapsearch-bin`, `--ldap-flavor`, `--key-file`, `--key-pw`
+### Fixed
+- No longer requires OpenLDAP `ldapsearch`; works with the SDS-bundled IBM client
+  out of the box (previously the OpenLDAP-only flags failed against idsldapsearch)
+
 ## [1.0.0] - 2026-06-25
 ### Added
 - Initial release

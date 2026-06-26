@@ -10,8 +10,11 @@
 ## Requirements
 - Icinga 2 >= 2.13.0
 - Bash >= 4.x
-- An LDAP search client in `PATH` on the executing node: the SDS-bundled
-  `idsldapsearch` (preferred) or a standard `ldapsearch`
+- An LDAP search client: the SDS-bundled `idsldapsearch` or OpenLDAP `ldapsearch`.
+  Both are fully supported — the plugin auto-detects the flag syntax and
+  auto-locates `idsldapsearch` under `/opt/*/ldap/*/bin`, so the icinga user does
+  **not** need the SDS `bin` on its `PATH` (override with `--ldapsearch-bin` if your
+  install lives elsewhere). OpenLDAP `ldapsearch` (`openldap-clients`) also works.
 - A bind account permitted to read the replication agreement entries
 
 ### Monitor account
@@ -89,6 +92,10 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
    | -Z          | (none)                      | Boolean | No       | No         | `$isds_repl_starttls$` | Use StartTLS on the plain port               |
    | -D          | `$isds_repl_binddn$`        | String  | No       | No         | —                      | Bind DN (read-only replication account)      |
    | -y          | `$isds_repl_passfile$`      | String  | No       | No         | —                      | File containing the bind password            |
+   | --ldapsearch-bin | `$isds_repl_ldapsearch_bin$` | String | No     | No         | —                      | Absolute path to idsldapsearch/ldapsearch (auto-detected if unset) |
+   | --ldap-flavor | `$isds_repl_ldap_flavor$`  | String  | No       | No         | —                      | Force ibm or openldap flag syntax (auto-detected if unset) |
+   | --key-file  | `$isds_repl_key_file$`      | String  | No       | No         | —                      | IBM SSL key database (.kdb) for --ldaps      |
+   | --key-pw    | `$isds_repl_key_pw$`        | String  | No       | No         | —                      | IBM SSL key database password/stash for --ldaps |
    | -b          | `$isds_repl_base$`          | String  | **Yes**  | No         | —                      | Search base for replication agreements       |
    | --repl-base | `$isds_repl_repl_base$`     | String  | No       | No         | —                      | Optional sub-tree under -b to search instead |
    | --agreement | `$isds_repl_agreement$`     | String  | No       | **Yes**    | —                      | Only check agreement(s) with this cn (array) |

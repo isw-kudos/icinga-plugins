@@ -30,7 +30,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_monitor"
-PLUGIN_VERSION="1.0.0"
+PLUGIN_VERSION="1.1.0"
 
 # ---------- Defaults ----------
 HOST="127.0.0.1"
@@ -41,6 +41,14 @@ BINDDN=""
 BINDPW=""
 BINDPW_FILE=""
 MONITOR_BASE="cn=monitor"
+
+# LDAP client selection. The plugin auto-detects whether the client uses IBM
+# (idsldapsearch: -h/-p/-L/-w) or OpenLDAP (ldapsearch: -H/-x/-LLL/-y) flag
+# syntax and builds the right arguments. Override either with the flags below.
+LDAPSEARCH_OVERRIDE=""   # --ldapsearch-bin: absolute path to the client binary
+LDAP_FLAVOR=""           # --ldap-flavor: force "ibm" or "openldap" (else auto)
+KEY_FILE=""              # --key-file: IBM SSL key database (.kdb) for --ldaps
+KEY_PW=""                # --key-pw: IBM SSL key database password/stash
 
 # Worker pool thresholds (alert when AVAILABLE workers drop low)
 WORKERS_WARN=2
@@ -104,6 +112,13 @@ Connection:
   -y PASSWORD_FILE       Read bind password from first line of file (preferred)
   --monitor-base DN      Monitor search base (default: ${MONITOR_BASE})
 
+LDAP client:
+  --ldapsearch-bin PATH  Absolute path to idsldapsearch/ldapsearch (else searched
+                         on PATH and under /opt/*/ldap/*/bin)
+  --ldap-flavor FLAVOR   Force "ibm" or "openldap" flag syntax (else auto-detected)
+  --key-file PATH        IBM SSL key database (.kdb) - used with --ldaps (IBM)
+  --key-pw PASS          IBM SSL key database password/stash - used with --ldaps
+
 Thresholds:
   --workers-warn N       Warn when available workers <= N (default: ${WORKERS_WARN})
   --workers-crit N       Crit when available workers <= N (default: ${WORKERS_CRIT})
@@ -136,6 +151,10 @@ while [[ $# -gt 0 ]]; do
         -D) BINDDN="$2"; shift 2 ;;
         -W) BINDPW="$2"; shift 2 ;;
         -y) BINDPW_FILE="$2"; shift 2 ;;
+        --ldapsearch-bin) LDAPSEARCH_OVERRIDE="$2"; shift 2 ;;
+        --ldap-flavor) LDAP_FLAVOR="$2"; shift 2 ;;
+        --key-file) KEY_FILE="$2"; shift 2 ;;
+        --key-pw) KEY_PW="$2"; shift 2 ;;
         --monitor-base) MONITOR_BASE="$2"; shift 2 ;;
         --workers-warn) WORKERS_WARN="$2"; shift 2 ;;
         --workers-crit) WORKERS_CRIT="$2"; shift 2 ;;
@@ -173,17 +192,48 @@ record() {
     escalate "$lvl"
 }
 
-# Locate an LDAP search client: prefer the SDS-bundled idsldapsearch.
+# detect_flavor <binary-path> -> echoes "ibm" or "openldap"
+# IBM's idsldapsearch (and the ldapsearch shipped under the SDS install) use a
+# different flag syntax than OpenLDAP. Decide by binary name, then install path.
+detect_flavor() {
+    local b=$1 base
+    base=$(basename "$b")
+    if [[ "$base" == ids* ]]; then echo "ibm"; return; fi
+    case "$b" in
+        */ibm/ldap/*|*/IBM/ldap/*) echo "ibm" ;;
+        *)                         echo "openldap" ;;
+    esac
+}
+
+# Locate an LDAP search client and determine its flag flavor.
+# Honors --ldapsearch-bin; otherwise searches PATH then the SDS install dirs.
 LDAPSEARCH_BIN=""
 find_ldapsearch() {
-    local c
-    for c in idsldapsearch ldapsearch; do
-        if command -v "$c" >/dev/null 2>&1; then
-            LDAPSEARCH_BIN="$c"
-            return 0
+    if [[ -n "$LDAPSEARCH_OVERRIDE" ]]; then
+        if [[ -x "$LDAPSEARCH_OVERRIDE" ]]; then
+            LDAPSEARCH_BIN="$LDAPSEARCH_OVERRIDE"
+        elif command -v "$LDAPSEARCH_OVERRIDE" >/dev/null 2>&1; then
+            LDAPSEARCH_BIN=$(command -v "$LDAPSEARCH_OVERRIDE")
+        else
+            return 1
         fi
-    done
-    return 1
+    else
+        local c d
+        for c in idsldapsearch ldapsearch; do
+            if command -v "$c" >/dev/null 2>&1; then
+                LDAPSEARCH_BIN=$(command -v "$c"); break
+            fi
+        done
+        if [[ -z "$LDAPSEARCH_BIN" ]]; then
+            # SDS tools are usually off-PATH under the install directory.
+            for d in /opt/IBM/ldap/*/bin /opt/ibm/ldap/*/bin; do
+                if [[ -x "$d/idsldapsearch" ]]; then LDAPSEARCH_BIN="$d/idsldapsearch"; break; fi
+            done
+        fi
+    fi
+    [[ -z "$LDAPSEARCH_BIN" ]] && return 1
+    [[ -z "$LDAP_FLAVOR" ]] && LDAP_FLAVOR=$(detect_flavor "$LDAPSEARCH_BIN")
+    return 0
 }
 
 # run_ldapsearch <base> <scope> <filter> [attr...]
@@ -193,22 +243,50 @@ find_ldapsearch() {
 LDAP_OUT=""
 run_ldapsearch() {
     local base=$1 scope=$2 filter=$3; shift 3
-    local uri proto="ldap"
-    (( USE_LDAPS )) && proto="ldaps"
-    uri="${proto}://${HOST}:${PORT}"
+    local rc=0
+    local -a args=() envp=()
 
-    local args=(-x -H "$uri" -b "$base" -s "$scope" -LLL)
-    (( USE_STARTTLS )) && args+=(-ZZ)
-    [[ -n "$BINDDN" ]] && args+=(-D "$BINDDN")
-    if [[ -n "$BINDPW_FILE" ]]; then
-        args+=(-y "$BINDPW_FILE")
-    elif [[ -n "$BINDPW" ]]; then
-        args+=(-w "$BINDPW")
+    if [[ "$LDAP_FLAVOR" == "ibm" ]]; then
+        # IBM idsldapsearch: -h/-p, -L (single), simple bind by default, -w only.
+        args=(-h "$HOST" -p "$PORT" -b "$base" -s "$scope" -L)
+        if (( USE_LDAPS )); then
+            args+=(-Z)
+            [[ -n "$KEY_FILE" ]] && args+=(-K "$KEY_FILE")
+            [[ -n "$KEY_PW" ]]   && args+=(-P "$KEY_PW")
+        fi
+        [[ -n "$BINDDN" ]] && args+=(-D "$BINDDN")
+        # IBM has no password-file flag; read it and pass -w (visible in ps).
+        local pw=""
+        if [[ -n "$BINDPW_FILE" ]]; then
+            pw=$(head -n1 "$BINDPW_FILE" 2>/dev/null) || true
+        elif [[ -n "$BINDPW" ]]; then
+            pw="$BINDPW"
+        fi
+        [[ -n "$pw" ]] && args+=(-w "$pw")
+        # Ensure the SDS shared libraries resolve for an off-PATH binary.
+        local root
+        root=$(dirname "$(dirname "$LDAPSEARCH_BIN")")
+        if [[ -d "$root/lib64" || -d "$root/lib" ]]; then
+            envp=(env "LD_LIBRARY_PATH=$root/lib64:$root/lib:${LD_LIBRARY_PATH:-}")
+        fi
+    else
+        # OpenLDAP ldapsearch: -H URI, -x simple auth, -LLL, -y password file.
+        local uri proto="ldap"
+        (( USE_LDAPS )) && proto="ldaps"
+        uri="${proto}://${HOST}:${PORT}"
+        args=(-x -H "$uri" -b "$base" -s "$scope" -LLL)
+        (( USE_STARTTLS )) && args+=(-ZZ)
+        [[ -n "$BINDDN" ]] && args+=(-D "$BINDDN")
+        if [[ -n "$BINDPW_FILE" ]]; then
+            args+=(-y "$BINDPW_FILE")
+        elif [[ -n "$BINDPW" ]]; then
+            args+=(-w "$BINDPW")
+        fi
     fi
     args+=("$filter" "$@")
 
-    local rc=0
-    LDAP_OUT=$(timeout --kill-after=2 "$TIMEOUT" "$LDAPSEARCH_BIN" "${args[@]}" 2>&1) || rc=$?
+    LDAP_OUT=$(timeout --kill-after=2 "$TIMEOUT" \
+        ${envp[@]+"${envp[@]}"} "$LDAPSEARCH_BIN" "${args[@]}" 2>&1) || rc=$?
     return "$rc"
 }
 
@@ -233,7 +311,13 @@ is_number() { [[ "$1" =~ ^[0-9]+$ ]]; }
 MONITOR_LDIF=""
 fetch_monitor() {
     if ! find_ldapsearch; then
-        record "${STATE_UNKNOWN}" "monitor" "No ldapsearch/idsldapsearch found in PATH"
+        record "${STATE_UNKNOWN}" "monitor" \
+            "No idsldapsearch/ldapsearch found on PATH or under /opt/*/ldap/*/bin - install openldap-clients or pass --ldapsearch-bin /path"
+        return 1
+    fi
+    if [[ "$LDAP_FLAVOR" == "ibm" ]] && (( USE_STARTTLS )); then
+        record "${STATE_UNKNOWN}" "monitor" \
+            "StartTLS (-Z) is not supported with the IBM client; use --ldaps (SSL) with --key-file"
         return 1
     fi
     local rc=0
