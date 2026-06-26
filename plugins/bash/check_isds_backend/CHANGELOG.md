@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-26
+### Fixed
+- DB2 sub-checks now run `CONNECT` + query in a **single** CLP session (statements
+  fed to `db2 -x -t` on stdin) instead of two chained `db2` invocations, which under
+  a non-interactive `su -c` did not share the connection and failed with `SQL1024N`.
+- Tablespace SQL filters `TBSP_UTILIZATION_PERCENT >= 0`, dropping system temporary
+  tablespaces (which report `-1`, not a real utilization).
+- Transaction-log parsing takes the lone-integer result line, robust against the
+  CLP welcome banner / connection-info block now present in the output.
+- `sanitize` lowercases via `tr` instead of `${var,,}` (portable; bash 3.2+).
+
 ## [1.0.0] - 2026-06-25
 ### Added
 - Initial release

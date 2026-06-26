@@ -97,9 +97,9 @@ check_isds_backend OK - proc_ibmslapd=OK proc_db2=OK proc_ibmdiradm=OK db2_table
 
 | Plugin Version | Icinga 2 Version | OS                     | Lang Version |
 |----------------|------------------|------------------------|--------------|
-| 1.0.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
-| 1.0.0          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
-| 1.0.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
+| 1.0.1          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
+| 1.0.1          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
+| 1.0.1          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
 
 ## License
 MIT - see LICENSE

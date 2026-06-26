@@ -36,7 +36,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_backend"
-PLUGIN_VERSION="1.0.0"
+PLUGIN_VERSION="1.0.1"
 
 # ---------- Defaults ----------
 # Tablespace utilization thresholds (percent)
@@ -191,29 +191,35 @@ count_procs() {
 sanitize() {
     local s="$1"
     s="${s//[^A-Za-z0-9]/_}"
-    printf '%s' "${s,,}"
+    printf '%s' "$s" | tr '[:upper:]' '[:lower:]'
 }
 
 # ---------------------------------------------------------------------------
 # DB2 command runner.
 #
-# run_db2 <db2-command-string>
+# run_db2 <sql-statement>
+#   Runs "CONNECT TO <db>; <sql>;" in a SINGLE db2 CLP session (statements fed on
+#   stdin to `db2 -x -t`). A single session is required: chaining two separate
+#   `db2` invocations (db2 connect; db2 query) does not reliably share the
+#   connection under a non-interactive `su -c`, yielding SQL1024N. The CLP prints
+#   a welcome banner + connection-info block on stdin mode; callers skip those
+#   non-data lines when parsing.
 #   Sets global DB2_OUT to combined stdout+stderr and DB2_RC to the exit code.
 #   Must NOT be called via command substitution, or DB2_OUT/DB2_RC would be set
-#   in a subshell and lost. When --db2-user is set, the command is run as that
-#   user via `su - USER -c '...'` (sudo wraps this if the Icinga user is not
-#   already root - see INSTALL.md). Otherwise it runs as the current user.
+#   in a subshell and lost. When --db2-user is set, db2 runs as that user via
+#   `su - USER` (sudo wraps the plugin if Icinga is not root - see INSTALL.md).
 # ---------------------------------------------------------------------------
 DB2_OUT=""
 DB2_RC=0
 run_db2() {
-    local db2cmd=$1
+    local sql=$1 script
+    printf -v script 'connect to %s;\n%s;\n' "$DB2_DATABASE" "$sql"
     DB2_OUT=""
     DB2_RC=0
     if [[ -n "$DB2_USER" ]]; then
-        DB2_OUT=$(timeout --kill-after=2 "$TIMEOUT" su - "$DB2_USER" -c "$db2cmd" 2>&1) || DB2_RC=$?
+        DB2_OUT=$(printf '%s' "$script" | timeout --kill-after=2 "$TIMEOUT" su - "$DB2_USER" -c 'db2 -x -t' 2>&1) || DB2_RC=$?
     else
-        DB2_OUT=$(timeout --kill-after=2 "$TIMEOUT" bash -c "$db2cmd" 2>&1) || DB2_RC=$?
+        DB2_OUT=$(printf '%s' "$script" | timeout --kill-after=2 "$TIMEOUT" db2 -x -t 2>&1) || DB2_RC=$?
     fi
     return 0
 }
@@ -291,12 +297,12 @@ check_tablespace() {
     # --- DB2 QUERY (tablespace utilization) --------------------------------
     # May need adjustment per DB2 version. SYSIBMADM.TBSP_UTILIZATION exposes
     # TBSP_UTILIZATION_PERCENT for permanent/auto-resize tablespaces. -x strips
-    # headers/footers so each line is "TBSP_NAME  PCT".
-    local sql="SELECT TBSP_NAME, INT(TBSP_UTILIZATION_PERCENT) FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_UTILIZATION_PERCENT IS NOT NULL"
-    local db2cmd="db2 connect to ${DB2_DATABASE} >/dev/null && db2 -x \"${sql}\""
+    # result headers so each data line is "TBSP_NAME  PCT". The `>= 0` filter
+    # drops system temporary tablespaces (which report -1, not a real %).
+    local sql="SELECT TBSP_NAME, INT(TBSP_UTILIZATION_PERCENT) FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_UTILIZATION_PERCENT >= 0"
     # -----------------------------------------------------------------------
 
-    run_db2 "$db2cmd"
+    run_db2 "$sql"
     db2_rc_failed "db2_tablespace" && return
 
     local worst=${STATE_OK} any=0 high=() name pct safe
@@ -333,15 +339,15 @@ check_logs() {
     # If MON_GET_TRANSACTION_LOG is unavailable on your version, replace this
     # with a `db2pd -db <db> -logs` parse instead.
     local sql="SELECT INT( (FLOAT(TOTAL_LOG_USED) / NULLIF(TOTAL_LOG_USED + TOTAL_LOG_AVAILABLE, 0)) * 100 ) FROM TABLE(MON_GET_TRANSACTION_LOG(-1))"
-    local db2cmd="db2 connect to ${DB2_DATABASE} >/dev/null && db2 -x \"${sql}\""
     # -----------------------------------------------------------------------
 
-    run_db2 "$db2cmd"
+    run_db2 "$sql"
     db2_rc_failed "db2_logs" && return
 
-    # First numeric token in the output is the used%.
+    # The query returns a single integer on its own line. Take the last lone-integer
+    # line so the CLP welcome banner / connection-info block cannot be mis-parsed.
     local pct=""
-    pct=$(printf '%s\n' "$DB2_OUT" | tr -s ' ' '\n' | grep -E '^[0-9]+$' | head -n1 || true)
+    pct=$(printf '%s\n' "$DB2_OUT" | awk '/^[[:space:]]*[0-9]+[[:space:]]*$/ { v=$1 } END { if (v != "") print v }')
 
     if ! is_number "$pct"; then
         record "${STATE_UNKNOWN}" "db2_logs" "could not parse log utilization from DB2 output (check DB2 version/SQL)"
