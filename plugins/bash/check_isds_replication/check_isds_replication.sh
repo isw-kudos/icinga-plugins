@@ -33,7 +33,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_replication"
-PLUGIN_VERSION="1.1.0"
+PLUGIN_VERSION="1.1.1"
 
 # ---------- Defaults ----------
 HOST="127.0.0.1"
@@ -286,7 +286,19 @@ run_ldapsearch() {
 
     LDAP_OUT=$(timeout --kill-after=2 "$TIMEOUT" \
         ${envp[@]+"${envp[@]}"} "$LDAPSEARCH_BIN" "${args[@]}" 2>&1) || rc=$?
+    LDAP_OUT=$(unfold_ldif "$LDAP_OUT")
     return "$rc"
+}
+
+# unfold_ldif <ldif> -> undo RFC 2849 line folding (continuation lines start with
+# a single space). IBM idsldapsearch -L wraps long lines such as replication
+# agreement DNs, which would otherwise parse as truncated -> invalid DN syntax.
+unfold_ldif() {
+    printf '%s\n' "$1" | awk '
+        NR==1 { acc=$0; next }
+        /^ /  { acc=acc substr($0,2); next }
+        { print acc; acc=$0 }
+        END   { if (NR>0) print acc }'
 }
 
 # ldif_get <ldif> <attr> -> first value of attr (case-insensitive), empty if absent

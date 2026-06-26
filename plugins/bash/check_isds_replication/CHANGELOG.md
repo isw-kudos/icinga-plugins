@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-26
+### Fixed
+- Unfold LDIF line continuations (RFC 2849) before parsing. IBM `idsldapsearch -L`
+  wraps lines longer than ~77 chars with a leading-space continuation, so long
+  replication agreement DNs were read truncated and the per-agreement lookup
+  failed with `Invalid DN syntax` (rc=34). DNs are now reassembled before use.
+
 ## [1.1.0] - 2026-06-26
 ### Added
 - Support for IBM `idsldapsearch` flag syntax (`-h/-p/-L/-w`) in addition to
