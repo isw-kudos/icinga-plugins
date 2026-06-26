@@ -17,8 +17,10 @@ Per-agreement checks (aggregated to the worst overall state):
 ## Requirements
 - Icinga 2 >= 2.13.0
 - Bash >= 4.x
-- An LDAP search client in `PATH`: the SDS-bundled `idsldapsearch` (preferred) or
-  a standard `ldapsearch` (OpenLDAP client utilities)
+- An LDAP search client — both are fully supported and the plugin auto-detects IBM
+  vs OpenLDAP flag syntax. The SDS-bundled `idsldapsearch` is auto-located under
+  `/opt/*/ldap/*/bin`, so no PATH change is needed when run as the icinga user.
+  OpenLDAP `ldapsearch` (`openldap-clients` / `ldap-utils`) also works.
 - A bind account allowed to read the replication agreement entries
 
 ## Compatibility
@@ -43,6 +45,10 @@ check_isds_replication -b <base> [-H host] [-p port] [--ldaps|-Z] [-D binddn] \
 | -D              | No       |             | Bind DN (read-only replication monitor account)      |
 | -W              | No       |             | Bind password (discouraged — visible in `ps`)        |
 | -y              | No       |             | File holding the bind password (preferred)           |
+| --ldapsearch-bin| No       | (auto)      | Absolute path to idsldapsearch/ldapsearch (else auto-located on PATH and under /opt/*/ldap/*/bin) |
+| --ldap-flavor   | No       | (auto)      | Force `ibm` or `openldap` flag syntax (else auto-detected) |
+| --key-file      | No       |             | IBM SSL key database (.kdb) for `--ldaps`            |
+| --key-pw        | No       |             | IBM SSL key database password/stash for `--ldaps`    |
 | -b / --base     | Yes      |             | Search base for replication agreements               |
 | --repl-base     | No       | (from base) | Optional sub-tree under `-b` to search instead        |
 | --agreement     | No       | (all)       | Only check the agreement with this cn (repeatable)   |
@@ -80,14 +86,19 @@ check_isds_replication CRITICAL - replica_b=CRIT | agreements_ok=0 agreements_er
 - The set of "error" state strings (suspend, on hold, error, retrying, waiting,
   binding) is defined in the `ERROR_STATES` array near the top of the script and
   can be tuned for your SDS version.
+- With the IBM `idsldapsearch` client there is no password-file flag, so when you
+  pass `-y FILE` the plugin reads the file and supplies the password via `-w`, which
+  is briefly visible in the process list (`ps`). The OpenLDAP `ldapsearch` client
+  passes the file directly via `-y` and never exposes the password in `ps`. On the
+  local SDS host the IBM behaviour is generally acceptable.
 
 ## Compatibility Matrix
 
 | Plugin Version | Icinga 2 Version | OS                     | Lang Version |
 |----------------|------------------|------------------------|--------------|
-| 1.0.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
-| 1.0.0          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
-| 1.0.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
+| 1.1.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
+| 1.1.0          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
+| 1.1.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
 
 ## License
 MIT - see LICENSE
