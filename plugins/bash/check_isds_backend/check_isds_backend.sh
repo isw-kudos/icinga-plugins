@@ -36,7 +36,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_backend"
-PLUGIN_VERSION="1.0.1"
+PLUGIN_VERSION="1.0.2"
 
 # ---------- Defaults ----------
 # Tablespace utilization thresholds (percent)
@@ -221,6 +221,10 @@ run_db2() {
     else
         DB2_OUT=$(printf '%s' "$script" | timeout --kill-after=2 "$TIMEOUT" db2 -x -t 2>&1) || DB2_RC=$?
     fi
+    # The CLP prints its prompt inline before the first result line when reading
+    # from stdin (e.g. "db2 => SYSCATSPACE  95"). Strip the prompt so the first
+    # data row (and a lone scalar result) parse like the rest.
+    DB2_OUT=$(printf '%s\n' "$DB2_OUT" | sed -e 's/^db2 (cont.) => //' -e 's/^db2 => //')
     return 0
 }
 
@@ -295,23 +299,32 @@ check_tablespace() {
     db2_preflight "db2_tablespace" || return
 
     # --- DB2 QUERY (tablespace utilization) --------------------------------
-    # May need adjustment per DB2 version. SYSIBMADM.TBSP_UTILIZATION exposes
-    # TBSP_UTILIZATION_PERCENT for permanent/auto-resize tablespaces. -x strips
-    # result headers so each data line is "TBSP_NAME  PCT". The `>= 0` filter
-    # drops system temporary tablespaces (which report -1, not a real %).
-    local sql="SELECT TBSP_NAME, INT(TBSP_UTILIZATION_PERCENT) FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_UTILIZATION_PERCENT >= 0"
+    # May need adjustment per DB2 version. SYSIBMADM.TBSP_UTILIZATION exposes, per
+    # tablespace: utilization %, whether auto-resize is enabled, and the max size
+    # (-1 = unlimited). -x strips result headers; each data line is
+    # "TBSP_NAME  PCT  AUTO_RESIZE  MAX_SIZE". The `>= 0` filter drops system
+    # temporary tablespaces (which report -1, not a real %).
+    local sql="SELECT TBSP_NAME, INT(TBSP_UTILIZATION_PERCENT), TBSP_AUTO_RESIZE_ENABLED, TBSP_MAX_SIZE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_UTILIZATION_PERCENT >= 0"
     # -----------------------------------------------------------------------
 
     run_db2 "$sql"
     db2_rc_failed "db2_tablespace" && return
 
-    local worst=${STATE_OK} any=0 high=() name pct safe
-    while read -r name pct; do
+    local worst=${STATE_OK} any=0 alertable=0 info=0 high=() name pct autoresize maxsize safe
+    while read -r name pct autoresize maxsize; do
         [[ -z "$name" ]] && continue
         is_number "$pct" || continue
         any=1
         safe=$(sanitize "$name")
         PERFDATA+=("tablespace_used_pct_${safe}=${pct}%;${TBSP_WARN};${TBSP_CRIT};0;100")
+        # util% vs current allocation is only a capacity signal for tablespaces
+        # that cannot grow. An auto-resize tablespace with no max (-1) auto-extends
+        # (bounded only by the filesystem), so its util% is informational only.
+        if [[ "$autoresize" == "1" && "$maxsize" == "-1" ]]; then
+            info=$(( info + 1 ))
+            continue
+        fi
+        alertable=$(( alertable + 1 ))
         if (( pct >= TBSP_CRIT )); then
             high+=("${name} ${pct}%"); worst=${STATE_CRITICAL}
         elif (( pct >= TBSP_WARN )); then
@@ -323,10 +336,16 @@ check_tablespace() {
         record "${STATE_UNKNOWN}" "db2_tablespace" "no tablespace utilization rows parsed (check DB2 version/SQL)"
         return
     fi
-    if (( worst == STATE_OK )); then
-        record "${STATE_OK}" "db2_tablespace" "all tablespaces below ${TBSP_WARN}%"
+    local note=""
+    (( info > 0 )) && note=" (${info} auto-extending tablespace(s) informational)"
+    if (( worst == STATE_CRITICAL )); then
+        record "${STATE_CRITICAL}" "db2_tablespace" "high tablespace utilization: ${high[*]}${note}"
+    elif (( worst == STATE_WARNING )); then
+        record "${STATE_WARNING}" "db2_tablespace" "high tablespace utilization: ${high[*]}${note}"
+    elif (( alertable > 0 )); then
+        record "${STATE_OK}" "db2_tablespace" "${alertable} fixed tablespace(s) below ${TBSP_WARN}%${note}"
     else
-        record "$worst" "db2_tablespace" "high tablespace utilization: ${high[*]}"
+        record "${STATE_OK}" "db2_tablespace" "all ${info} tablespace(s) auto-extend; util% informational (no fixed-size tablespace to alert on)"
     fi
 }
 

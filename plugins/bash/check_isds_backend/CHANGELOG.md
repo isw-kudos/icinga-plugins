@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-26
+### Fixed
+- Strip the CLP `db2 => ` / `db2 (cont.) => ` prompt that the stdin session prints
+  inline before the first result line. Previously the first tablespace row (and a
+  lone scalar like the log %) was prefixed and silently dropped — so the busiest
+  tablespace went unmonitored and `db2-logs` reported UNKNOWN.
+### Changed
+- Tablespace alerting is now **auto-resize-aware**: `TBSP_UTILIZATION_PERCENT` is
+  measured against *current* allocation, so an auto-resize tablespace with no max
+  (`TBSP_MAX_SIZE = -1`) can sit near 100% while healthily auto-extending. Such
+  tablespaces are now emitted as perfdata (informational) and not alerted on;
+  warn/crit apply only to fixed tablespaces (and auto-resize with a finite max).
+  Prevents a false CRITICAL on e.g. SYSCATSPACE at 95% on automatic-storage DBs.
+
 ## [1.0.1] - 2026-06-26
 ### Fixed
 - DB2 sub-checks now run `CONNECT` + query in a **single** CLP session (statements
