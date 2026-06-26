@@ -12,10 +12,15 @@ soonest is reported in the summary; you can also target a single label.
 ## Requirements
 - Icinga 2 >= 2.13.0
 - Bash >= 4.x
-- A GSKit CMS cert tool in `PATH` on the SDS host: `gsk8capicmd_64` (preferred),
-  `gsk8capicmd`, or the SDS-bundled `idsgskcapicmd`
+- A GSKit CMS cert tool (`gsk8capicmd_64` preferred, `gsk8capicmd`, or the
+  SDS-bundled `idsgskcapicmd`). The plugin auto-locates it on `PATH` **and** under
+  common GSKit install dirs (`/opt/db2/*/gskit/bin`, `/usr/local/ibm/gsk8_64/bin`,
+  `/opt/ibm/gsk8_64/bin`, `/opt/IBM/ldap/*/bin`), and sets `LD_LIBRARY_PATH` to the
+  matching GSKit lib dir — so no `PATH` change is needed for the Icinga user. Use
+  `--gsk-bin PATH` to point at a specific binary.
 - GNU `date` (the `date -d` syntax; standard on the SDS Linux host)
-- Read access to the `.kdb` keystore and its `.sth` stash file for the Icinga user
+- The `.kdb` keystore and its `.sth` stash file must be readable by the Icinga user
+  (they typically are — both are commonly world-readable)
 
 ## Compatibility
 See Compatibility Matrix below.
@@ -33,7 +38,9 @@ check_isds_cert --kdb PATH [--stash PATH | --password PW] [--label LABEL] \
 | --kdb        | Yes      |         | Path to the GSKit CMS keystore (`.kdb`)                            |
 | --stash      | No       |         | Path to the `.sth` stash file (preferred; unlocks via `-stashed`) |
 | --password   | No       |         | Keystore password — **discouraged**, visible in `ps`              |
-| --label      | No       |         | Check only this cert label. Omitted = check all, report soonest.  |
+| --label      | No       |         | Check only this cert label. Omitted = check all personal certs, report soonest. |
+| --all-certs  | No       |         | Check every cert incl. trusted CA roots; default personal only    |
+| --gsk-bin    | No       | (auto)  | Path to the GSKit cert tool; auto-located if unset                |
 | -w           | No       | 30      | Warn when a cert expires within DAYS days                         |
 | -c           | No       | 7       | Crit when a cert expires within DAYS days                         |
 | -t           | No       | 30      | Timeout in seconds                                                |
@@ -47,15 +54,19 @@ of the process list.
 
 ## Example Output
 ```
-check_isds_cert WARNING - server_cert=WARN ca_root=OK soonest=OK | days_until_expiry_server_cert=18;30:;7:;; days_until_expiry_ca_root=512;30:;7:;; min_days_until_expiry=18;30:;7:;;
-[WARN] 'server cert' expires in 18 days
-[OK] 'ca root' expires in 512 days
-[OK] 'server cert' expires in 18 days
+check_isds_cert OK - ldap_ams_cloud=OK soonest=OK | days_until_expiry_ldap_ams_cloud=5264;30:;7:;; min_days_until_expiry=5264;30:;7:;;
+[OK] 'ldap.ams.cloud' expires in 5264 days
 ```
 
 ## Known Limitations
+- A keystore usually also bundles trusted CA roots, several of which are often
+  long-expired (e.g. an Equifax root expired in 2018). To avoid false `CRITICAL`s
+  the plugin by default checks **only personal certs** (the cert the server
+  presents on LDAPS). Pass `--all-certs` to include the trusted CA roots as well.
 - The exact field wording in `gsk*capicmd -cert -details` output varies by GSKit
-  version (e.g. `Not After`, `Valid To`, `validTo`). If a cert reports
+  version (e.g. `Not After`, `Valid To`, `validTo`); the script handles the
+  GSKit 8 / ISVD 10.x `Not After : YYYY M D HH:MM:SS GMT+TZ` format as well as
+  formats GNU `date -d` understands. If a cert reports
   `UNKNOWN - could not find expiry date`, adjust the `NOT_AFTER_REGEX` value in the
   clearly-marked *Validity field matching* block near the top of the script.
 - Likewise the `-cert -list` output format differs slightly across versions; the
@@ -70,9 +81,9 @@ check_isds_cert WARNING - server_cert=WARN ca_root=OK soonest=OK | days_until_ex
 
 | Plugin Version | Icinga 2 Version | OS                     | Lang Version |
 |----------------|------------------|------------------------|--------------|
-| 1.0.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
-| 1.0.0          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
-| 1.0.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
+| 1.1.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Bash 5.x     |
+| 1.1.0          | >= 2.13.0        | Debian 11/12           | Bash 5.x     |
+| 1.1.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Bash 4.x     |
 
 ## License
 MIT - see LICENSE
