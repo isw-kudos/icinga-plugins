@@ -25,7 +25,7 @@ check_k8s_pods [--kubeconfig PATH [--context NAME]
               | --api-url URL --token TOKEN [--ca-cert PATH | --insecure]]
              [-n NAMESPACE ...] [--exclude-namespace NS ...]
              [-l SELECTOR] [-w INT] [-c INT]
-             [--pending-grace SECONDS] [--exclude-restart-pod PATTERN ...]
+             [--pending-grace SECONDS] [--exclude-restart-pod PATTERNS]
              [-t SECONDS] [-v] [-V] [-h]
 ```
 
@@ -45,7 +45,7 @@ check_k8s_pods [--kubeconfig PATH [--context NAME]
 | -w / --restart-warning | No       | 5       | WARNING when any container restart count >= this                         |
 | -c / --restart-critical| No       | 20      | CRITICAL when any container restart count >= this                        |
 | --pending-grace        | No       | 300     | Seconds a pod may remain Pending before CRITICAL                         |
-| --exclude-restart-pod  | No       |         | Skip restart-count thresholds for pods matching this namespace/name glob. Repeat for multiple. |
+| --exclude-restart-pod  | No       |         | Comma-separated list of namespace/name globs; matched pods skip restart-count thresholds. Flag also repeatable. |
 | -t / --timeout         | No       | 30      | Plugin timeout in seconds                                                |
 | -v / --verbose         | No       | false   | Include OK pods in output                                                |
 | -V / --version         | No       |         | Show plugin version                                                      |
@@ -262,11 +262,12 @@ check_k8s_pods --kubeconfig prod.kubeconfig --pending-grace 120
 > CRITICAL via the container-waiting-reason check — `--pending-grace` does
 > not apply to them.
 
-#### `--exclude-restart-pod PATTERN` (repeatable)
+#### `--exclude-restart-pod PATTERNS`
 
 Suppresses **only** the restart-count thresholds (`-w` / `-c`) for pods
-whose `namespace/name` matches the given shell glob. Every other health
-check still applies to matched pods — this is **not** a full pod mute:
+whose `namespace/name` matches one of the given shell globs. Every other
+health check still applies to matched pods — this is **not** a full pod
+mute:
 
 - **Still CRITICAL** for matched pods: CrashLoopBackOff, ImagePullBackOff,
   ErrImagePull, other bad waiting reasons, phase `Failed` / `Unknown`,
@@ -274,41 +275,36 @@ check still applies to matched pods — this is **not** a full pod mute:
 - **Still WARNING** for matched pods: Running with containers not ready.
 - **Not counted** in the `max_restarts` performance data metric.
 
-Pattern syntax is `fnmatch` (Python shell glob) matched against
-`namespace/name` — `*` (any run of chars), `?` (single char), `[abc]`
-(char class). Match is case-sensitive; K8s resource names are lowercase.
+Value is a **comma-separated list** of `namespace/name` globs. Pattern
+syntax is `fnmatch` (Python shell glob) — `*` (any run of chars), `?`
+(single char), `[abc]` (char class). Match is case-sensitive; K8s
+resource names are lowercase. Whitespace around commas is trimmed.
 
 ```bash
-# Ignore restart-count for one specific pod
+# Single pattern
 check_k8s_pods --kubeconfig prod.kubeconfig \
   --exclude-restart-pod 'default/flaky-worker-abcd1234'
 
-# Ignore all pods of a Deployment (matching its pod-name prefix)
+# Multiple patterns — comma-separated in one value
 check_k8s_pods --kubeconfig prod.kubeconfig \
-  --exclude-restart-pod 'batch/oom-known-*'
+  --exclude-restart-pod 'ci/flaky-*,batch/oom-known-*,chaos/*'
 
-# Multiple exclusions — repeat the flag
+# The flag itself is also repeatable if you prefer
 check_k8s_pods --kubeconfig prod.kubeconfig \
   --exclude-restart-pod 'ci/*' \
   --exclude-restart-pod 'chaos/*'
 ```
 
-**Repeat the flag** once per pattern — comma-separated values do not work
-(`--exclude-restart-pod 'a,b'` is read as a single pattern that will not
-match anything).
-
-In **Icinga 2 config**, the CheckCommand uses `repeat_key = true`, so set
-the host var as an **array**:
+In **Icinga 2 config**, the host var is a plain **string** — one
+comma-separated value:
 
 ```icinga2
-vars.check_k8s_pods_exclude_restart_pods = [
-  "ci/flaky-*",
-  "batch/oom-known-*",
-]
+vars.check_k8s_pods_exclude_restart_pods = "ci/flaky-*,batch/oom-known-*"
 ```
 
-In **Icinga Director**, set the matching custom field as an Array data
-type (one element per pattern).
+In **Icinga Director**, set the matching custom field as a **String**
+data type (not Array). Enter the whole comma-separated list in one
+field.
 
 Use this when:
 - A pod is known to restart routinely by design (chaos-monkey targets,
@@ -437,9 +433,9 @@ check_k8s_pods CRITICAL - 40/42 pod(s) OK, 1 CRITICAL, 1 WARNING | pods_total=42
 
 | Plugin Version | Icinga 2 Version | OS                     | Lang Version |
 |----------------|------------------|------------------------|--------------|
-| 1.1.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Python 3.10  |
-| 1.1.0          | >= 2.13.0        | Debian 11/12           | Python 3.9/3.11 |
-| 1.1.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Python 3.8/3.9 |
+| 1.2.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Python 3.10  |
+| 1.2.0          | >= 2.13.0        | Debian 11/12           | Python 3.9/3.11 |
+| 1.2.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Python 3.8/3.9 |
 
 ## License
 

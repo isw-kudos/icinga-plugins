@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-14
+### Changed
+- `--exclude-restart-pod` now accepts a **comma-separated list** of
+  `namespace/name` globs (e.g. `--exclude-restart-pod 'ci/flaky-*,batch/oom-*'`).
+  The flag remains repeatable on the CLI for compatibility, but the Icinga 2
+  host var is now a plain string:
+  `vars.check_k8s_pods_exclude_restart_pods = "ci/flaky-*,batch/oom-*"`.
+- CheckCommand no longer uses `repeat_key = true` for this argument.
+- Icinga Director custom field should be **String** (not Array).
+
+### Migration
+Anyone who set the v1.1.0 array form
+(`vars.check_k8s_pods_exclude_restart_pods = [ "a", "b" ]`) should
+convert it to a comma-separated string
+(`vars.check_k8s_pods_exclude_restart_pods = "a,b"`).
+
 ## [1.1.0] - 2026-07-14
 ### Added
 - `--exclude-restart-pod PATTERN` (repeatable) — skip the restart-count
