@@ -433,7 +433,7 @@ Minimum supported Director version: 1.10.0
    | `-w`                   | `$check_k8s_pods_restart_warning$`             | No         |                             | No       |
    | `-c`                   | `$check_k8s_pods_restart_critical$`            | No         |                             | No       |
    | `--pending-grace`      | `$check_k8s_pods_pending_grace$`               | No         |                             | No       |
-   | `--exclude-restart-pod`| `$check_k8s_pods_exclude_restart_pods$`        | Yes        |                             | No       |
+   | `--exclude-restart-pod`| `$check_k8s_pods_exclude_restart_pods$`        | No         |                             | No       |
    | `-t`                   | `$check_k8s_pods_timeout$`                     | No         |                             | No       |
    | `-v`                   |                                                | No         | `$check_k8s_pods_verbose$`  | No       |
 

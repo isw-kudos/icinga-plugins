@@ -21,7 +21,7 @@ from fnmatch import fnmatchcase
 from typing import Any
 
 PLUGIN_NAME = "check_k8s_pods"
-PLUGIN_VERSION = "1.1.0"
+PLUGIN_VERSION = "1.2.0"
 
 STATE_OK = 0
 STATE_WARNING = 1
@@ -263,12 +263,14 @@ def parse_args() -> argparse.Namespace:
         "--exclude-restart-pod",
         action="append",
         default=[],
-        metavar="PATTERN",
+        metavar="PATTERNS",
         help=(
             "Skip restart-count thresholds for pods whose 'namespace/name' "
-            "matches this shell glob (e.g. 'ci/flaky-*'). Repeatable. Other "
-            "pod-health checks (CrashLoopBackOff, ImagePullBackOff, Failed, "
-            "pending-beyond-grace, not-ready) still apply."
+            "matches a shell glob (e.g. 'ci/flaky-*'). Accepts a single "
+            "pattern or a comma-separated list ('ci/*,batch/oom-*'). The "
+            "flag itself is also repeatable. Other pod-health checks "
+            "(CrashLoopBackOff, ImagePullBackOff, Failed, pending-beyond-grace, "
+            "not-ready) still apply."
         ),
     )
     parser.add_argument(
@@ -361,7 +363,12 @@ def main() -> None:
     state_counts = {STATE_OK: 0, STATE_WARNING: 0, STATE_CRITICAL: 0}
     max_restarts_overall = 0
 
-    exclude_restart_patterns = args.exclude_restart_pod or []
+    exclude_restart_patterns = [
+        pat.strip()
+        for raw in (args.exclude_restart_pod or [])
+        for pat in raw.split(",")
+        if pat.strip()
+    ]
 
     for pod in pods:
         pod_key = f"{pod.metadata.namespace}/{pod.metadata.name}"
