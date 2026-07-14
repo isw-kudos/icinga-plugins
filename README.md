@@ -11,7 +11,7 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | [check_itop_unassigned_tickets](plugins/bash/check_itop_unassigned_tickets) | Bash | Checks iTop for unassigned tickets via REST API | 1.0.0 | Stable |
 | [check_cnx_search](plugins/bash/check_cnx_search) | Bash | Checks HCL Connections search index freshness | 1.0.0 | Stable |
 | [check_cnx_docs](plugins/bash/check_cnx_docs) | Bash | Checks HCL Connections Docs Conversion server (sym_monitor + soffice) | 1.0.0 | Stable |
-| [check_k8s_pods](plugins/python/check_k8s_pods) | Python | Alerts on Kubernetes pod health (CrashLoopBackOff, ImagePullBackOff, Pending, restart counts) | 1.0.0 | Stable |
+| [check_k8s_pods](plugins/python/check_k8s_pods) | Python | Alerts on Kubernetes pod health (CrashLoopBackOff, ImagePullBackOff, Pending, restart counts) | 1.1.0 | Stable |
 | [check_k8s_workloads](plugins/python/check_k8s_workloads) | Python | Alerts on Kubernetes Deployment/StatefulSet replica health and stalled rollouts | 1.0.0 | Stable |
 | [check_k8s_nodes](plugins/python/check_k8s_nodes) | Python | Alerts on Kubernetes node Ready / pressure conditions and cordoned nodes | 1.0.0 | Stable |
 | [check_isds_monitor](plugins/bash/check_isds_monitor) | Bash | Checks IBM Security Directory Server cn=monitor (worker pool, connections, throughput, cache hit ratios) | 1.1.2 | Stable |

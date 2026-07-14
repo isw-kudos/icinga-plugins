@@ -17,10 +17,11 @@ import argparse
 import signal
 import sys
 from datetime import datetime, timezone
+from fnmatch import fnmatchcase
 from typing import Any
 
 PLUGIN_NAME = "check_k8s_pods"
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.1.0"
 
 STATE_OK = 0
 STATE_WARNING = 1
@@ -110,8 +111,13 @@ def evaluate_pod(
     restart_warn: int,
     restart_crit: int,
     pending_grace: int,
+    skip_restart_check: bool = False,
 ) -> tuple[int, str, int]:
-    """Evaluate a single pod. Returns (state, reason_or_empty, max_restarts)."""
+    """Evaluate a single pod. Returns (state, reason_or_empty, max_restarts).
+
+    When skip_restart_check is True, the two restart-count threshold branches
+    are bypassed; every other health check still applies.
+    """
     meta = pod.metadata
     status = pod.status
     name = f"{meta.namespace}/{meta.name}"
@@ -174,7 +180,7 @@ def evaluate_pod(
         cs.name for cs in (status.container_statuses or []) if not cs.ready
     ]
 
-    if max_restarts >= restart_crit:
+    if not skip_restart_check and max_restarts >= restart_crit:
         return (
             STATE_CRITICAL,
             f"{name} restarts={max_restarts} (>={restart_crit})",
@@ -188,7 +194,7 @@ def evaluate_pod(
             max_restarts,
         )
 
-    if max_restarts >= restart_warn:
+    if not skip_restart_check and max_restarts >= restart_warn:
         return (
             STATE_WARNING,
             f"{name} restarts={max_restarts} (>={restart_warn})",
@@ -252,6 +258,18 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=300,
         help="Seconds a pod may remain Pending before CRITICAL (default: 300)",
+    )
+    parser.add_argument(
+        "--exclude-restart-pod",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help=(
+            "Skip restart-count thresholds for pods whose 'namespace/name' "
+            "matches this shell glob (e.g. 'ci/flaky-*'). Repeatable. Other "
+            "pod-health checks (CrashLoopBackOff, ImagePullBackOff, Failed, "
+            "pending-beyond-grace, not-ready) still apply."
+        ),
     )
     parser.add_argument(
         "-t",
@@ -343,12 +361,22 @@ def main() -> None:
     state_counts = {STATE_OK: 0, STATE_WARNING: 0, STATE_CRITICAL: 0}
     max_restarts_overall = 0
 
+    exclude_restart_patterns = args.exclude_restart_pod or []
+
     for pod in pods:
+        pod_key = f"{pod.metadata.namespace}/{pod.metadata.name}"
+        skip_restart = any(
+            fnmatchcase(pod_key, pat) for pat in exclude_restart_patterns
+        )
         state, reason, restarts = evaluate_pod(
-            pod, args.restart_warning, args.restart_critical, args.pending_grace
+            pod,
+            args.restart_warning,
+            args.restart_critical,
+            args.pending_grace,
+            skip_restart_check=skip_restart,
         )
         state_counts[state] = state_counts.get(state, 0) + 1
-        if restarts > max_restarts_overall:
+        if not skip_restart and restarts > max_restarts_overall:
             max_restarts_overall = restarts
         if state > worst_state:
             worst_state = state
