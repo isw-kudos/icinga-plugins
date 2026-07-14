@@ -25,7 +25,8 @@ check_k8s_pods [--kubeconfig PATH [--context NAME]
               | --api-url URL --token TOKEN [--ca-cert PATH | --insecure]]
              [-n NAMESPACE ...] [--exclude-namespace NS ...]
              [-l SELECTOR] [-w INT] [-c INT]
-             [--pending-grace SECONDS] [-t SECONDS] [-v] [-V] [-h]
+             [--pending-grace SECONDS] [--exclude-restart-pod PATTERN ...]
+             [-t SECONDS] [-v] [-V] [-h]
 ```
 
 ## Arguments
@@ -44,6 +45,7 @@ check_k8s_pods [--kubeconfig PATH [--context NAME]
 | -w / --restart-warning | No       | 5       | WARNING when any container restart count >= this                         |
 | -c / --restart-critical| No       | 20      | CRITICAL when any container restart count >= this                        |
 | --pending-grace        | No       | 300     | Seconds a pod may remain Pending before CRITICAL                         |
+| --exclude-restart-pod  | No       |         | Skip restart-count thresholds for pods matching this namespace/name glob. Repeat for multiple. |
 | -t / --timeout         | No       | 30      | Plugin timeout in seconds                                                |
 | -v / --verbose         | No       | false   | Include OK pods in output                                                |
 | -V / --version         | No       |         | Show plugin version                                                      |
@@ -260,6 +262,65 @@ check_k8s_pods --kubeconfig prod.kubeconfig --pending-grace 120
 > CRITICAL via the container-waiting-reason check — `--pending-grace` does
 > not apply to them.
 
+#### `--exclude-restart-pod PATTERN` (repeatable)
+
+Suppresses **only** the restart-count thresholds (`-w` / `-c`) for pods
+whose `namespace/name` matches the given shell glob. Every other health
+check still applies to matched pods — this is **not** a full pod mute:
+
+- **Still CRITICAL** for matched pods: CrashLoopBackOff, ImagePullBackOff,
+  ErrImagePull, other bad waiting reasons, phase `Failed` / `Unknown`,
+  container terminated with non-zero exit, Pending beyond `--pending-grace`.
+- **Still WARNING** for matched pods: Running with containers not ready.
+- **Not counted** in the `max_restarts` performance data metric.
+
+Pattern syntax is `fnmatch` (Python shell glob) matched against
+`namespace/name` — `*` (any run of chars), `?` (single char), `[abc]`
+(char class). Match is case-sensitive; K8s resource names are lowercase.
+
+```bash
+# Ignore restart-count for one specific pod
+check_k8s_pods --kubeconfig prod.kubeconfig \
+  --exclude-restart-pod 'default/flaky-worker-abcd1234'
+
+# Ignore all pods of a Deployment (matching its pod-name prefix)
+check_k8s_pods --kubeconfig prod.kubeconfig \
+  --exclude-restart-pod 'batch/oom-known-*'
+
+# Multiple exclusions — repeat the flag
+check_k8s_pods --kubeconfig prod.kubeconfig \
+  --exclude-restart-pod 'ci/*' \
+  --exclude-restart-pod 'chaos/*'
+```
+
+**Repeat the flag** once per pattern — comma-separated values do not work
+(`--exclude-restart-pod 'a,b'` is read as a single pattern that will not
+match anything).
+
+In **Icinga 2 config**, the CheckCommand uses `repeat_key = true`, so set
+the host var as an **array**:
+
+```icinga2
+vars.check_k8s_pods_exclude_restart_pods = [
+  "ci/flaky-*",
+  "batch/oom-known-*",
+]
+```
+
+In **Icinga Director**, set the matching custom field as an Array data
+type (one element per pattern).
+
+Use this when:
+- A pod is known to restart routinely by design (chaos-monkey targets,
+  batch jobs that OOM under investigation) and generates ticket noise.
+- A CrashLoopBackOff is being tracked elsewhere (dedicated ticket, war-room)
+  and you want Icinga to stop paging on the restart count while other
+  health signals for that pod still fire.
+
+Do NOT use this to hide a broken pod entirely — CrashLoopBackOff is not
+suppressed by this flag. If you truly want to skip a pod's every check,
+use `--exclude-namespace` at the namespace level instead.
+
 ### Execution & output
 
 #### `-t SECONDS` / `--timeout SECONDS` (default: `30`)
@@ -337,9 +398,9 @@ check_k8s_pods \
 | Pod phase Failed or Unknown                            | CRITICAL |
 | Container terminated with non-zero exit code (non-Succeeded pod) | CRITICAL |
 | Pod Pending longer than `--pending-grace`              | CRITICAL |
-| Container restart count >= `--restart-critical`        | CRITICAL |
+| Container restart count >= `--restart-critical` (unless pod matches `--exclude-restart-pod`) | CRITICAL |
 | Running pod with one or more containers not Ready      | WARNING  |
-| Container restart count >= `--restart-warning`         | WARNING  |
+| Container restart count >= `--restart-warning` (unless pod matches `--exclude-restart-pod`) | WARNING  |
 | Pod Succeeded (e.g. Job)                               | OK       |
 | Otherwise                                              | OK       |
 
@@ -361,7 +422,7 @@ check_k8s_pods CRITICAL - 40/42 pod(s) OK, 1 CRITICAL, 1 WARNING | pods_total=42
 | `pods_ok`       |     | Pods in OK state                             |
 | `pods_warning`  |     | Pods in WARNING state                        |
 | `pods_critical` |     | Pods in CRITICAL state                       |
-| `max_restarts`  |     | Highest container restart count among pods   |
+| `max_restarts`  |     | Highest container restart count among pods (excludes pods matched by `--exclude-restart-pod`) |
 
 ## Known Limitations
 
@@ -376,9 +437,9 @@ check_k8s_pods CRITICAL - 40/42 pod(s) OK, 1 CRITICAL, 1 WARNING | pods_total=42
 
 | Plugin Version | Icinga 2 Version | OS                     | Lang Version |
 |----------------|------------------|------------------------|--------------|
-| 1.0.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Python 3.10  |
-| 1.0.0          | >= 2.13.0        | Debian 11/12           | Python 3.9/3.11 |
-| 1.0.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Python 3.8/3.9 |
+| 1.1.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Python 3.10  |
+| 1.1.0          | >= 2.13.0        | Debian 11/12           | Python 3.9/3.11 |
+| 1.1.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Python 3.8/3.9 |
 
 ## License
 
