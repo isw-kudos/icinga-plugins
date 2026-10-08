@@ -207,6 +207,12 @@ is to repeat the key, which would produce `--containers a --containers b` — an
 argparse keeps only the last, silently monitoring one container while appearing
 to monitor several.
 
+**Escaping `$` in config files.** In the Director UI, type the regex as you mean
+it: `^itop$`. In a `.conf` file you must double the dollar — `"^itop$$"` —
+because `$` is Icinga's macro delimiter and a single one makes the config fail
+to load with *Closing $ not found in macro format string*. The shipped
+`host_template.conf` is already written that way.
+
 ### 2. Create the Service Templates
 
 **Services > Service Templates > + Add**, one per check, each with *Run on

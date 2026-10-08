@@ -467,6 +467,7 @@ Each plugin directory MUST contain:
     CHANGELOG.md
     icinga2/
       checkcommand.conf
+      service_template.conf (if applicable)
       host_template.conf    (if applicable)
       service.conf
 
