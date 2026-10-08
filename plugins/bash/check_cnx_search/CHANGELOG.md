@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-06
+### Fixed
+- Plugin exited silently with no output when the response was not XML (e.g. an
+  http:// URL redirecting to https://, or a login page), because the failing
+  xmllint call tripped set -e
+- HTTP 3xx redirects are now reported as UNKNOWN with the redirect target
+
 ## [1.0.0] - 2025-01-01
 ### Added
 - Initial release
