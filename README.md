@@ -9,7 +9,7 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | [check_domino_mail](plugins/bash/check_domino_mail) | Bash | Checks HCL Domino 14 mail server health (7 sub-checks) | 1.0.0 | Stable |
 | [check_nfs_mount](plugins/python/check_nfs_mount) | Python | Checks NFS mounts are mounted and accessible | 1.0.0 | Stable |
 | [check_itop_unassigned_tickets](plugins/bash/check_itop_unassigned_tickets) | Bash | Checks iTop for unassigned tickets via REST API | 1.0.0 | Stable |
-| [check_cnx_search](plugins/bash/check_cnx_search) | Bash | Checks HCL Connections search index freshness | 1.0.0 | Stable |
+| [check_cnx_search](plugins/bash/check_cnx_search) | Bash | Checks HCL Connections search index freshness | 1.0.1 | Stable |
 | [check_cnx_docs](plugins/bash/check_cnx_docs) | Bash | Checks HCL Connections Docs Conversion server (sym_monitor + soffice) | 1.0.0 | Stable |
 | [check_k8s_pods](plugins/python/check_k8s_pods) | Python | Alerts on Kubernetes pod health (CrashLoopBackOff, ImagePullBackOff, Pending, restart counts) | 1.2.0 | Stable |
 | [check_k8s_workloads](plugins/python/check_k8s_workloads) | Python | Alerts on Kubernetes Deployment/StatefulSet replica health and stalled rollouts | 1.0.0 | Stable |

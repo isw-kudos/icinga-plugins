@@ -6,7 +6,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_cnx_search"
-PLUGIN_VERSION="1.0.0"
+PLUGIN_VERSION="1.0.1"
 TIMEOUT=30
 
 # --- Defaults ---
@@ -63,15 +63,16 @@ main() {
   tmp_file=$(mktemp /tmp/cnx-search-XXXXXX.xml)
   trap 'rm -f "${tmp_file}"' EXIT
 
-  local curl_exit=0
-  curl --insecure \
+  local curl_exit=0 http_info=""
+  http_info=$(curl --insecure \
     --silent \
     --user "${USERNAME}:${PASSWORD}" \
     --header "Accept: application/atom+xml" \
     --max-time "${TIMEOUT}" \
     --fail \
     --output "${tmp_file}" \
-    "${BASE_URL}/search/atom/search?query=test" || curl_exit=$?
+    --write-out '%{http_code} %{redirect_url}' \
+    "${BASE_URL}/search/atom/search?query=test") || curl_exit=$?
 
   if [[ "${curl_exit}" -ne 0 ]]; then
     if [[ "${curl_exit}" -eq 28 ]]; then
@@ -82,11 +83,21 @@ main() {
     exit "${STATE_CRITICAL}"
   fi
 
+  # --fail only rejects 4xx/5xx, so a redirect (typically http -> https) would
+  # otherwise be parsed as if it were the feed.
+  local http_code="${http_info%% *}" redirect_url="${http_info#* }"
+  if [[ "${http_code}" == 3* ]]; then
+    echo "${PLUGIN_NAME} UNKNOWN - ${BASE_URL} redirected (HTTP ${http_code}) to ${redirect_url:-unknown location} - set -H to the final URL (e.g. https://)"
+    exit "${STATE_UNKNOWN}"
+  fi
+
+  # xmllint exits non-zero on non-XML input; without || true, set -e would end
+  # the script silently.
   local updated
-  updated=$(xmllint --xpath "string(/*[local-name()='feed']/*[local-name()='updated'][1])" "${tmp_file}" 2>/dev/null)
+  updated=$(xmllint --xpath "string(/*[local-name()='feed']/*[local-name()='updated'][1])" "${tmp_file}" 2>/dev/null) || true
 
   if [[ -z "${updated}" ]]; then
-    echo "${PLUGIN_NAME} UNKNOWN - Could not parse updated timestamp from XML response"
+    echo "${PLUGIN_NAME} UNKNOWN - Response (HTTP ${http_code}) is not an Atom feed with an updated timestamp - check credentials and that ${BASE_URL}/search is reachable"
     exit "${STATE_UNKNOWN}"
   fi
 
