@@ -44,26 +44,47 @@ the SDS host) — not necessarily the Icinga 2 master.
 
 ## Method 1: Config File Deployment
 
+> **Deploying several ISDS checks?** Use the ISDS service set in
+> [servicesets/isds](../../../servicesets/isds/README.md) instead of the
+> per-plugin `service.conf` files. It ships one host template and all four
+> apply rules. Deploy one or the other, never both: they define services of
+> the same names.
+
 ### CheckCommand Definition
 ```
 cp icinga2/checkcommand.conf /etc/icinga2/conf.d/check_isds_monitor_command.conf
 ```
+
+### Service Template
+```
+cp icinga2/service_template.conf /etc/icinga2/conf.d/check_isds_monitor_service_template.conf
+```
+
+The template sets the check interval and `command_endpoint = host.name`. The
+check runs on the agent on the SDS host, because the IBM LDAP client and the bind password file exist only there.
 
 ### Service Definition
 ```
 cp icinga2/service.conf /etc/icinga2/conf.d/check_isds_monitor_service.conf
 ```
 
-Set the bind DN, password file and `isds` flag on the SDS host object, e.g.:
+Set the `isds` flag and the shared LDAP connection on the SDS host object, e.g.:
 ```
 object Host "ldap01.example.com" {
   import "generic-host"
   address = "10.0.0.10"
   vars.isds = true
-  vars.isds_monitor_binddn   = "cn=monitor"
-  vars.isds_monitor_passfile = "/etc/icinga2/secrets/isds_monitor.pw"
+  vars.isds_ldap_host     = "127.0.0.1"
+  vars.isds_ldap_binddn   = "cn=icinga-monitor,cn=Users,cn=ServiceAccounts,dc=example,dc=com"
+  vars.isds_ldap_passfile = "/etc/icinga2/secrets/isds_monitor.pw"
 }
 ```
+
+Bind as a real service-account entry. `cn=monitor` is the search base, not an
+entry you can bind as, and binding to it fails with LDAP rc=48
+(*inappropriateAuthentication*). The `isds_ldap_*` variables are shared with
+the other LDAP check in the ISDS set, so one account and one password file
+serve both.
 
 Validate and reload:
 ```
@@ -77,7 +98,10 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 
 ### Create CheckCommand
 1. Director > Commands > External Commands > **+ Add**
-2. Name: `check_isds_monitor`, Command: `$USER1$/check_isds_monitor`
+2. Name: `check_isds_monitor`, Command: `/usr/lib64/nagios/plugins/check_isds_monitor`
+   Enter the command as an absolute path. Director prepends the plugin
+   directory to the first word of the command unless it is already absolute,
+   so `$USER1$/check_isds_monitor` becomes a doubled path that cannot run.
 3. Arguments tab — add each argument below. *Type* is the Director value type,
    *Required* mirrors the CheckCommand, *Repeat key* (`repeat_key`) applies to
    array arguments, and *Skip key* shows the `set_if` boolean that gates a flag
@@ -106,12 +130,31 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 
 4. **Store**, then **Deploy**.
 
+### Create Service Template
+1. Director > Services > Service Templates > **+ Add**
+2. Name: `isds-monitor`, Check command: `check_isds_monitor`
+3. Check interval `1m`, Retry interval `30s`, Max check attempts `3`
+4. **Run on agent**: Yes
+5. **Store**
+
 ### Create Service
 1. Director > Services > Apply Rules > **+ Add**
-2. Name: `isds-monitor`, Check command: `check_isds_monitor`
-3. Custom Properties: set `isds_monitor_binddn`, `isds_monitor_passfile`
+2. Name: `isds-monitor`, Imports: `isds-monitor` (the template above)
+3. Custom Properties: map the shared host variables onto the command's own,
+   which otherwise default to `$address$` and port 389:
+
+   | Custom property | Value |
+   |-----------------|-------|
+   | `isds_monitor_host` | `$isds_ldap_host$` |
+   | `isds_monitor_port` | `$isds_ldap_port$` |
+   | `isds_monitor_binddn` | `$isds_ldap_binddn$` |
+   | `isds_monitor_passfile` | `$isds_ldap_passfile$` |
+
 4. Assign tab: `host.vars.isds` is true
 5. **Store**, then **Deploy**.
+
+On the host (or a host template), set `isds = true` and the `isds_ldap_host`,
+`isds_ldap_port`, `isds_ldap_binddn` and `isds_ldap_passfile` custom variables.
 
 Sensitive values (the bind password): do not hardcode as a default var. Set the
 password file path per host and keep the file root/icinga-readable only. In
@@ -120,7 +163,8 @@ Director use a Data Field and a secrets-store integration.
 ## Verification
 
 ```
-/usr/lib64/nagios/plugins/check_isds_monitor -H 127.0.0.1 -D cn=monitor \
+sudo -u icinga /usr/lib64/nagios/plugins/check_isds_monitor -H 127.0.0.1 \
+  -D "cn=icinga-monitor,cn=Users,cn=ServiceAccounts,dc=example,dc=com" \
   -y /etc/icinga2/secrets/isds_monitor.pw
 ```
 

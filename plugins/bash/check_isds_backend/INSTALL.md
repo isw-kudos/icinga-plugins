@@ -44,9 +44,20 @@ Icinga user a narrow sudo rule. Add a file under `/etc/sudoers.d/` (validate wit
 icinga ALL=(root) NOPASSWD: /usr/lib64/nagios/plugins/check_isds_backend
 ```
 
-Then have Icinga invoke the plugin via `sudo`, e.g. set the CheckCommand to
-`sudo $USER1$/check_isds_backend` (or prefix in Director). The plugin runs as root
-and `su - <db2-user>` succeeds. Scope the sudo rule to this one plugin only.
+Then have Icinga invoke the plugin through `sudo`. In a config file, change the
+CheckCommand's command line:
+
+```
+object CheckCommand "check_isds_backend" {
+  command = [ "sudo", PluginDir + "/check_isds_backend" ]
+  ...
+}
+```
+
+In Director, see **Method 2** below. The plugin then runs as root and
+`su - <db2-user>` succeeds. Scope the sudo rule to this one plugin only.
+Without sudo, the process sub-checks still work, but every `db2-*` sub-check
+reports UNKNOWN.
 
 > If you prefer not to give the plugin root, grant a precise `su` rule instead and
 > have the plugin run under it — but the simplest, auditable approach is the
@@ -75,10 +86,31 @@ chmod +x /usr/lib64/nagios/plugins/check_isds_backend
 
 ## Method 1: Config File Deployment
 
+> **Deploying several ISDS checks?** Use the ISDS service set in
+> [servicesets/isds](../../../servicesets/isds/README.md) instead of the
+> per-plugin `service.conf` files. It ships one host template and all four
+> apply rules. Deploy one or the other, never both: they define services of
+> the same names.
+
 ### CheckCommand Definition
 ```
 cp icinga2/checkcommand.conf /etc/icinga2/conf.d/check_isds_backend_command.conf
 ```
+
+If you use `--db2-user` with the sudoers rule above, switch the copied command
+to sudo:
+```
+sed -i 's|command = \[ PluginDir + "/check_isds_backend" \]|command = [ "sudo", PluginDir + "/check_isds_backend" ]|' \
+  /etc/icinga2/conf.d/check_isds_backend_command.conf
+```
+
+### Service Template
+```
+cp icinga2/service_template.conf /etc/icinga2/conf.d/check_isds_backend_service_template.conf
+```
+
+The template sets the check interval and `command_endpoint = host.name`. The
+check runs on the agent on the SDS host, because it inspects local processes and runs the local `db2` CLI.
 
 ### Service Definition
 ```
@@ -91,9 +123,9 @@ object Host "ldap01.example.com" {
   import "generic-host"
   address = "10.0.0.10"
   vars.isds = true
-  vars.isds_backend_db2_instance = "dsrdbm01"
-  vars.isds_backend_db2_database = "ldapdb2"
-  vars.isds_backend_db2_user     = "dsrdbm01"
+  vars.isds_backend_db2_instance = "idsldap"
+  vars.isds_backend_db2_database = "IDSLDAP"
+  vars.isds_backend_db2_user     = "idsldap"
 }
 ```
 
@@ -109,8 +141,15 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 
 ### Create CheckCommand
 1. Director > Commands > External Commands > **+ Add**
-2. Name: `check_isds_backend`, Command: `$USER1$/check_isds_backend`
-   (or `sudo $USER1$/check_isds_backend` if using the sudo approach above)
+2. Name: `check_isds_backend`, Command:
+   `/bin/sudo /usr/lib64/nagios/plugins/check_isds_backend` with the sudoers
+   rule above, or `/usr/lib64/nagios/plugins/check_isds_backend` without it.
+
+   Enter every word as an absolute path, the sudo binary included. Director
+   prepends the plugin directory to the first word of the command unless it is
+   already absolute. `sudo ...` makes the agent look for
+   `/usr/lib64/nagios/plugins/sudo`, and `$USER1$/check_isds_backend` becomes a
+   doubled path. Confirm the sudo path on the agent with `command -v sudo`.
 3. Arguments tab — add each argument below. *Type* is the Director value type,
    *Required* mirrors the CheckCommand (the `--db2-*` args are required only for the
    DB2 sub-checks), *Repeat key* (`repeat_key`) applies to array arguments, and
@@ -135,11 +174,19 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 
 4. **Store**, then **Deploy**.
 
+### Create Service Template
+1. Director > Services > Service Templates > **+ Add**
+2. Name: `isds-backend`, Check command: `check_isds_backend`
+3. Check interval `1m`, Retry interval `30s`, Max check attempts `3`
+4. **Run on agent**: Yes
+5. **Store**
+
 ### Create Service
 1. Director > Services > Apply Rules > **+ Add**
-2. Name: `isds-backend`, Check command: `check_isds_backend`
-3. Custom Properties: set `isds_backend_db2_instance`, `isds_backend_db2_database`,
-   `isds_backend_db2_user`
+2. Name: `isds-backend`, Imports: `isds-backend` (the template above)
+3. Set `isds_backend_db2_instance`, `isds_backend_db2_database` and
+   `isds_backend_db2_user` on the host. The service reads them from there
+   under the same names.
 4. Assign tab: `host.vars.isds` is true
 5. **Store**, then **Deploy**.
 
@@ -152,10 +199,11 @@ Process check only (no DB2 needed):
 /usr/lib64/nagios/plugins/check_isds_backend --no-db2-tablespace --no-db2-logs
 ```
 
-Full check (as the instance owner or with sudo + `--db2-user`):
+Full check, run exactly as the agent will run it. This also proves the
+sudoers rule:
 ```
-/usr/lib64/nagios/plugins/check_isds_backend \
-  --db2-instance dsrdbm01 --db2-database ldapdb2 --db2-user dsrdbm01
+sudo -u icinga sudo -n /usr/lib64/nagios/plugins/check_isds_backend \
+  --db2-instance idsldap --db2-database IDSLDAP --db2-user idsldap
 ```
 
 Expected (healthy host):

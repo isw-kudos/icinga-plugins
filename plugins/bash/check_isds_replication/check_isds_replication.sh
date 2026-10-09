@@ -33,7 +33,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_replication"
-PLUGIN_VERSION="1.1.2"
+PLUGIN_VERSION="1.1.3"
 
 # ---------- Defaults ----------
 HOST="127.0.0.1"
