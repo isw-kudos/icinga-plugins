@@ -73,12 +73,20 @@ Recreate the container for the change to take effect.
 Not the application user, and not root:
 
 ```sql
-CREATE USER 'icinga_ro'@'127.0.0.1' IDENTIFIED BY 'choose-a-strong-password';
-GRANT SELECT ON itop.priv_sync_replica TO 'icinga_ro'@'127.0.0.1';
-GRANT SELECT ON itop.priv_async_task   TO 'icinga_ro'@'127.0.0.1';
-GRANT SELECT ON itop.priv_event        TO 'icinga_ro'@'127.0.0.1';
+CREATE USER 'icinga_ro'@'%' IDENTIFIED BY 'choose-a-strong-password';
+GRANT SELECT ON itop.priv_sync_replica TO 'icinga_ro'@'%';
+GRANT SELECT ON itop.priv_async_task   TO 'icinga_ro'@'%';
+GRANT SELECT ON itop.priv_event        TO 'icinga_ro'@'%';
 FLUSH PRIVILEGES;
 ```
+
+> **Grant to `@'%'`, not `@'127.0.0.1'`.** When the database port is published
+> from a container, the connection reaches MariaDB from the Docker bridge
+> gateway (e.g. `172.18.0.1`), not from loopback — a `@'127.0.0.1'` user is
+> rejected with *Access denied for user 'icinga_ro'@'172.18.0.1'*. Binding the
+> published port to `127.0.0.1` is what restricts access to host-local
+> processes; the grant host cannot do it. Scope it to the bridge subnet instead
+> if you prefer, but that subnet changes when the compose network is recreated.
 
 ```
 # /etc/icinga2/itop-ro.cnf
