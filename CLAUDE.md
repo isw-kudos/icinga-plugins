@@ -20,6 +20,7 @@ plugins/
       CHANGELOG.md
       icinga2/
         checkcommand.conf
+        service_template.conf  (if applicable)
         host_template.conf   (if applicable)
         service.conf
   python/
@@ -31,8 +32,15 @@ plugins/
       requirements.txt       (if applicable)
       icinga2/
         checkcommand.conf
+        service_template.conf  (if applicable)
         host_template.conf   (if applicable)
         service.conf
+servicesets/
+  example/                   (if applicable)
+    host_template.conf
+    services.conf
+    checkcommand_*.conf      (only for reused third-party plugins)
+    README.md
 lib/
   bash/
     common.sh
@@ -304,7 +312,8 @@ All plugins MUST pass linting before merge. Enforced via GitHub Actions on push 
 ## Icinga 2 Configuration Files
 
 ### Conf File Conventions
-- One file per object type: checkcommand.conf, host_template.conf, service.conf
+- One file per object type: checkcommand.conf, service_template.conf,
+  host_template.conf, service.conf
 - Always use PluginDir - never hardcode paths
 - Always include description for each argument
 - Always set sensible default vars in CheckCommand
@@ -385,6 +394,66 @@ apply Service "check_example" {
   // or: assign where "example-host-template" in host.templates
 }
 
+### service_template.conf Template
+Include when the check has scheduling or execution behaviour that is the same
+wherever it is deployed, so an apply rule only has to supply the per-host
+values. Required for any plugin that participates in a service set.
+
+// check_example - Service Template
+// Part of: https://github.com/isw-kudos/icinga-plugins
+// Docs: plugins/bash/check_example/INSTALL.md
+// Minimum Icinga 2 version: 2.13.0
+
+template Service "example" {
+  check_command = "check_example"
+
+  check_interval = 1h
+  retry_interval = 10m
+  max_check_attempts = 2
+
+  // For checks that read local state, so they run on the agent.
+  command_endpoint = host.name
+}
+
+An apply rule then imports it:
+
+apply Service "example" {
+  import "example"
+  ...
+}
+
+---
+
+## Service Sets
+
+A service set bundles several checks that are deployed together against one
+kind of system. Add one under servicesets/<name>/ when a system needs more than
+two or three checks to be monitored properly.
+
+  servicesets/example/
+    host_template.conf       template Host - enables the set, holds shared vars
+    services.conf            every apply rule in the set, in one file
+    checkcommand_*.conf      ONLY for reused third-party plugins (see below)
+    README.md                CLI and Director deployment, both
+
+Rules:
+
+- **Reuse before writing.** If Icinga's ITL or a plugin already deployed to the
+  estate already does the job, the set uses it and ships only the conf. Do not
+  add a plugin to this repository that duplicates check_http, check_disk or
+  similar. Record the reuse in the set's README.
+- A CheckCommand for a third-party plugin lives in the service set, never in
+  plugins/ - that directory is for plugins this repository owns.
+- services.conf and the per-plugin service.conf files are ALTERNATIVES. They
+  define apply rules of the same name, so deploying both makes Icinga refuse to
+  start. Say so at the top of services.conf.
+- Shared settings get one var prefix used by every check in the set (e.g.
+  itop_db_*), defined once in the host template rather than per service.
+- Every rule in the set assigns on the same single host var.
+- README.md MUST document both deployment paths: config files and Icinga
+  Director, including a Director Service Set.
+- Add the set to the Service Sets table in the root README.md.
+
 ---
 
 ## Per-Plugin Documentation Structure
@@ -398,6 +467,7 @@ Each plugin directory MUST contain:
     CHANGELOG.md
     icinga2/
       checkcommand.conf
+      service_template.conf (if applicable)
       host_template.conf    (if applicable)
       service.conf
 

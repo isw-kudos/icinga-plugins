@@ -18,6 +18,20 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | [check_isds_replication](plugins/bash/check_isds_replication) | Bash | Checks IBM Security Directory Server replication agreement state and pending-change backlog | 1.1.2 | Stable |
 | [check_isds_backend](plugins/bash/check_isds_backend) | Bash | Checks IBM Security Directory Server process liveness and DB2 backend (tablespace/log usage) | 1.0.2 | Stable |
 | [check_isds_cert](plugins/bash/check_isds_cert) | Bash | Checks IBM Security Directory Server GSKit keystore (.kdb) TLS certificate expiry | 1.1.1 | Stable |
+| [check_file_age](plugins/bash/check_file_age) | Bash | Age of the newest file matching a glob; treats absence as CRITICAL | 1.0.0 | Stable |
+| [check_archive_integrity](plugins/bash/check_archive_integrity) | Bash | Decompression test and checksum sidecar check for the newest archive | 1.0.0 | Stable |
+| [check_itop_cron](plugins/bash/check_itop_cron) | Bash | Checks iTop background tasks are being processed, not just that cron is up | 1.0.0 | Stable |
+| [check_itop_replica_errors](plugins/bash/check_itop_replica_errors) | Bash | Checks iTop synchro replicas in error per data source, against a recorded baseline | 1.0.0 | Stable |
+| [check_itop_mail](plugins/bash/check_itop_mail) | Bash | Checks iTop mail leaves the host and is not going to a capture sink | 1.0.0 | Stable |
+
+## Service Sets
+
+Ready-made bundles that combine several checks — including reuse of plugins that
+already exist — into one deployable unit.
+
+| Service Set | Checks | Description |
+|-------------|--------|-------------|
+| [itop](servicesets/itop) | 7 | Application-level monitoring for an iTop instance: reachability through the VIP, backup freshness and integrity, container state, synchro replica errors, background task processing, and mail delivery |
 
 ## Compatibility
 
@@ -58,6 +72,21 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | check_isds_cert | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
 | check_isds_cert | >= 2.13.0 | Debian 11/12 | Bash 5.x |
 | check_isds_cert | >= 2.13.0 | RHEL / Rocky Linux 8/9 | Bash 4.x |
+| check_file_age | >= 2.13.0 | RHEL / Rocky / AlmaLinux 8/9 | Bash 4.x |
+| check_file_age | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
+| check_file_age | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_archive_integrity | >= 2.13.0 | RHEL / Rocky / AlmaLinux 8/9 | Bash 4.x |
+| check_archive_integrity | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
+| check_archive_integrity | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_itop_cron | >= 2.13.0 | RHEL / Rocky / AlmaLinux 8/9 | Bash 4.x |
+| check_itop_cron | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
+| check_itop_cron | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_itop_replica_errors | >= 2.13.0 | RHEL / Rocky / AlmaLinux 8/9 | Bash 4.x |
+| check_itop_replica_errors | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
+| check_itop_replica_errors | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_itop_mail | >= 2.13.0 | RHEL / Rocky / AlmaLinux 8/9 | Bash 4.x |
+| check_itop_mail | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
+| check_itop_mail | >= 2.13.0 | Debian 11/12 | Bash 5.x |
 
 ## Installation
 
