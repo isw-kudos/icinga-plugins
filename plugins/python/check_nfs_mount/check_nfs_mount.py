@@ -7,23 +7,22 @@
 check_nfs_mount - Icinga 2 plugin to verify NFS mounts are correctly mounted and accessible.
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 import signal
 import sys
 import time
+from typing import Dict, List, Tuple
 
 PLUGIN_NAME = "check_nfs_mount"
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.0.1"
 
 STATE_OK = 0
 STATE_WARNING = 1
 STATE_CRITICAL = 2
 STATE_UNKNOWN = 3
 
-STATE_NAMES: dict[int, str] = {
+STATE_NAMES: Dict[int, str] = {
     STATE_OK: "OK",
     STATE_WARNING: "WARNING",
     STATE_CRITICAL: "CRITICAL",
@@ -39,9 +38,9 @@ def _timeout_handler(signum: int, frame: object) -> None:
     raise MountTimeoutError("Operation timed out")
 
 
-def parse_mounts() -> dict[str, tuple[str, str]]:
+def parse_mounts() -> Dict[str, Tuple[str, str]]:
     """Parse /proc/mounts and return a dict mapping mount_point -> (source, fstype)."""
-    mounts: dict[str, tuple[str, str]] = {}
+    mounts: Dict[str, Tuple[str, str]] = {}
     try:
         with open("/proc/mounts") as f:
             for line in f:
@@ -60,10 +59,10 @@ def parse_mounts() -> dict[str, tuple[str, str]]:
 
 def check_mount(
     mount_point: str,
-    mounts: dict[str, tuple[str, str]],
+    mounts: Dict[str, Tuple[str, str]],
     timeout: int,
     check_write: bool = False,
-) -> tuple[int, str, float]:
+) -> Tuple[int, str, float]:
     """Check a single mount point. Returns (state, message, elapsed_ms)."""
     normalized = mount_point.rstrip("/") or "/"
 
@@ -189,7 +188,7 @@ def main() -> None:
         print(f"{PLUGIN_NAME} UNKNOWN - {e}")
         sys.exit(STATE_UNKNOWN)
 
-    results: list[tuple[str, int, str, float]] = []
+    results: List[Tuple[str, int, str, float]] = []
     worst_state = STATE_OK
 
     for mp in args.mount:
