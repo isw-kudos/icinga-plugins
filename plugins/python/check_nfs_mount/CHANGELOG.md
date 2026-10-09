@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-14
+### Fixed
+- Plugin now runs on Python 3.6, the stock `python3` on RHEL / Rocky / AlmaLinux 8.
+  Previously `from __future__ import annotations` caused a compile-time
+  `SyntaxError: future feature annotations is not defined`, so the check failed
+  before executing a single line on any node whose `python3` was older than 3.7.
+
+### Changed
+- Removed `from __future__ import annotations`
+- Builtin generic annotations (`dict[...]`, `list[...]`, `tuple[...]`) replaced with
+  `typing.Dict` / `typing.List` / `typing.Tuple` equivalents
+- Minimum supported Python lowered from 3.8 to 3.6 in README.md and INSTALL.md
+
+No behaviour, argument, or output-format changes.
+
 ## [1.0.0] - 2025-01-01
 ### Added
 - Initial release

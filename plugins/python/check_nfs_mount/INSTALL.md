@@ -17,7 +17,7 @@
 ## Requirements
 
 - Icinga 2 >= 2.13.0
-- Python >= 3.8
+- Python >= 3.6 (the stock `python3` on RHEL / Rocky / AlmaLinux 8 is sufficient)
 - Linux only — requires `/proc/mounts` and SIGALRM
 - Plugin user must have read access to all checked mount points
 - For write check: plugin user must have write permission on the mount
@@ -36,6 +36,27 @@ chmod +x /usr/lib64/nagios/plugins/check_nfs_mount
 If using a satellite/agent setup, install the plugin on the node that has the
 NFS mounts — NFS mounts are local to the mounting host. Do not run this check
 from the Icinga 2 master unless it also has the mounts.
+
+### Confirm the interpreter Icinga will actually use
+
+The shebang is `#!/usr/bin/env python3`, which resolves via `PATH` — and the
+icinga user's `PATH` is narrower than root's login shell. Check what it resolves
+to as the icinga user, not as root:
+
+```bash
+sudo -u icinga env -i /bin/sh -c 'command -v python3; python3 -V'
+```
+
+Any `python3` of 3.6 or newer is fine. If the command finds nothing, install
+`python3` on that node. Note that a plugin failing to exec is reported by Icinga
+as a missing *file*, which is misleading:
+
+```
+execvpe(/usr/lib64/nagios/plugins/check_nfs_mount) failed: No such file or directory
+```
+
+If the plugin file is present and executable, that message means the *interpreter*
+named in the shebang could not be found — not the plugin.
 
 ## Method 1: Config File Deployment
 

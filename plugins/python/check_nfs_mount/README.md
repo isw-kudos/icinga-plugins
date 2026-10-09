@@ -7,7 +7,7 @@ SIGALRM is used per-mount to detect hung/stale mounts that block indefinitely.
 ## Requirements
 
 - Icinga 2 >= 2.13.0
-- Python >= 3.8
+- Python >= 3.6 (runs on the stock `python3` of RHEL / Rocky / AlmaLinux 8)
 - Linux only — requires `/proc/mounts` and SIGALRM (not available on macOS/BSD)
 - Plugin must run as a user with read access to all checked mount points
 - For write check (`-w`): plugin user must have write permission on the mount
@@ -70,9 +70,16 @@ and report the mount as unresponsive.
 
 | Plugin Version | Icinga 2 Version | OS                     | Lang Version |
 |----------------|------------------|------------------------|--------------|
-| 1.0.0          | >= 2.13.0        | Ubuntu 22.04/24.04     | Python 3.10  |
-| 1.0.0          | >= 2.13.0        | Debian 11/12           | Python 3.9/3.11 |
-| 1.0.0          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Python 3.8/3.9 |
+| 1.0.1          | >= 2.13.0        | Ubuntu 22.04/24.04     | Python 3.10  |
+| 1.0.1          | >= 2.13.0        | Debian 11/12           | Python 3.9/3.11 |
+| 1.0.1          | >= 2.13.0        | RHEL / Rocky Linux 8/9 | Python 3.6/3.9 |
+
+Verified against Python 3.6.15, 3.9.25 and 3.12.13.
+
+> **RHEL / Alma / Rocky 8:** the stock `python3` is 3.6 (via
+> `/etc/alternatives/python3` → `platform-python3.6`). Plugin versions before 1.0.1
+> failed there with `SyntaxError: future feature annotations is not defined`.
+> From 1.0.1 onward no interpreter pinning is needed.
 
 ## License
 
