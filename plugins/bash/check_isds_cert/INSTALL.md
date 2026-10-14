@@ -76,10 +76,24 @@ the Icinga 2 master.
 
 ## Method 1: Config File Deployment
 
+> **Deploying several ISDS checks?** Use the ISDS service set in
+> [servicesets/isds](../../../servicesets/isds/README.md) instead of the
+> per-plugin `service.conf` files. It ships one host template and all four
+> apply rules. Deploy one or the other, never both: they define services of
+> the same names.
+
 ### CheckCommand Definition
 ```
 cp icinga2/checkcommand.conf /etc/icinga2/conf.d/check_isds_cert_command.conf
 ```
+
+### Service Template
+```
+cp icinga2/service_template.conf /etc/icinga2/conf.d/check_isds_cert_service_template.conf
+```
+
+The template sets the check interval and `command_endpoint = host.name`. The
+check runs on the agent on the SDS host, because the keystore is a file on that host.
 
 ### Service Definition
 ```
@@ -109,7 +123,10 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 
 ### Create CheckCommand
 1. Director > Commands > External Commands > **+ Add**
-2. Name: `check_isds_cert`, Command: `$USER1$/check_isds_cert`
+2. Name: `check_isds_cert`, Command: `/usr/lib64/nagios/plugins/check_isds_cert`
+   Enter the command as an absolute path. Director prepends the plugin
+   directory to the first word of the command unless it is already absolute,
+   so `$USER1$/check_isds_cert` becomes a doubled path that cannot run.
 3. Arguments tab — add each argument below. *Type* is the Director value type and
    *Required* mirrors the CheckCommand. Only `--all-certs` uses a skip key
    (`set_if`); none use a repeat key:
@@ -128,14 +145,20 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 
 4. **Store**, then **Deploy**.
 
+### Create Service Template
+1. Director > Services > Service Templates > **+ Add**
+2. Name: `isds-cert`, Check command: `check_isds_cert`
+3. Check interval `6h`, Retry interval `10m`, Max check attempts `2`
+4. **Run on agent**: Yes
+5. **Store**
+
 ### Create Service
 1. Director > Services > Apply Rules > **+ Add**
-2. Name: `isds-cert`, Check command: `check_isds_cert`
-3. Custom Properties: set `isds_cert_kdb`, `isds_cert_stash`
+2. Name: `isds-cert`, Imports: `isds-cert` (the template above)
+3. Set `isds_cert_kdb` and `isds_cert_stash` on the host. The service reads
+   them from there under the same names.
 4. Assign tab: `host.vars.isds` is true
-5. Set the check interval to something occasional (e.g. 6h) — a cert check does not
-   need to run every minute.
-6. **Store**, then **Deploy**.
+5. **Store**, then **Deploy**.
 
 Sensitive values (a keystore password): do not hardcode as a default var. Prefer
 the stash file; if you must use a password, use a Director Data Field and a

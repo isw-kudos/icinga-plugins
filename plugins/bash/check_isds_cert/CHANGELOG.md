@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-09
+### Added
+- `icinga2/service_template.conf`: template `isds-cert` (6h / 10m, 2 attempts),
+  used by the per-plugin `service.conf` and by the ISDS service set
+  (`servicesets/isds`).
+### Fixed
+- The service now runs on the agent (`command_endpoint = host.name`). Previously
+  it ran from the master and looked for the keystore on the master's filesystem.
+- Director instructions use an absolute command path. `$USER1$/...` makes
+  Director produce a doubled path.
+
 ## [1.1.1] - 2026-06-26
 ### Fixed
 - Parse cert labels from `gsk -cert -list` whether printed **bare** (labels without

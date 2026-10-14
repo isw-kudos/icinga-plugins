@@ -36,7 +36,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_backend"
-PLUGIN_VERSION="1.0.2"
+PLUGIN_VERSION="1.0.3"
 
 # ---------- Defaults ----------
 # Tablespace utilization thresholds (percent)

@@ -19,12 +19,15 @@
 
 ### Monitor account
 Create a dedicated, least-privilege account that can read the replication
-agreement entries under your suffix. Do not reuse an administrative DN. Store its
-password in a root-owned file readable only by the Icinga user, e.g.:
+agreement entries under your suffix. Do not reuse an administrative DN. The
+account and password file created for `check_isds_monitor` serve both checks.
+See **Creating the monitor bind account** in
+[check_isds_monitor/README.md](../check_isds_monitor/README.md#creating-the-monitor-bind-account).
+Store the password in a file readable only by the Icinga user, e.g.:
 
 ```
-install -o icinga -g icinga -m 0400 /dev/null /etc/icinga2/secrets/isds_repl.pw
-printf '%s' 'THE_PASSWORD' > /etc/icinga2/secrets/isds_repl.pw
+install -o icinga -g icinga -m 0400 /dev/null /etc/icinga2/secrets/isds_monitor.pw
+printf '%s' 'THE_PASSWORD' > /etc/icinga2/secrets/isds_monitor.pw
 ```
 
 ## Plugin Installation
@@ -43,28 +46,54 @@ the SDS host) — not necessarily the Icinga 2 master.
 
 ## Method 1: Config File Deployment
 
+> **Deploying several ISDS checks?** Use the ISDS service set in
+> [servicesets/isds](../../../servicesets/isds/README.md) instead of the
+> per-plugin `service.conf` files. It ships one host template and all four
+> apply rules. Deploy one or the other, never both: they define services of
+> the same names.
+
 ### CheckCommand Definition
 ```
 cp icinga2/checkcommand.conf /etc/icinga2/conf.d/check_isds_replication_command.conf
 ```
+
+### Service Template
+```
+cp icinga2/service_template.conf /etc/icinga2/conf.d/check_isds_replication_service_template.conf
+```
+
+The template sets the check interval and `command_endpoint = host.name`. The
+check runs on the agent on the SDS host, because the IBM LDAP client and the bind password file exist only there.
 
 ### Service Definition
 ```
 cp icinga2/service.conf /etc/icinga2/conf.d/check_isds_replication_service.conf
 ```
 
-Set the bind DN, password file, the replication search base and the `isds` flag
+Set the `isds` flag, the shared LDAP connection and the replication search base
 on the SDS host object, e.g.:
 ```
 object Host "ldap01.example.com" {
   import "generic-host"
   address = "10.0.0.10"
   vars.isds = true
-  vars.isds_repl_binddn   = "cn=monitor"
-  vars.isds_repl_passfile = "/etc/icinga2/secrets/isds_repl.pw"
+  vars.isds_ldap_host     = "127.0.0.1"
+  vars.isds_ldap_binddn   = "cn=icinga-monitor,cn=Users,cn=ServiceAccounts,dc=example,dc=com"
+  vars.isds_ldap_passfile = "/etc/icinga2/secrets/isds_monitor.pw"
   vars.isds_repl_base     = "dc=example,dc=com"
 }
 ```
+
+Bind as a real service-account entry. `cn=monitor` is the search base, not an
+entry you can bind as, and binding to it fails with LDAP rc=48
+(*inappropriateAuthentication*). The `isds_ldap_*` variables are shared with
+the other LDAP check in the ISDS set, so one account and one password file
+serve both.
+
+Apply the service to **every** server in the replication topology. An
+agreement's operational state is published only on its supplier side. On the
+consumer side the check reports an informational OK, so in a peer pair
+checking a single server sees only one direction.
 
 Validate and reload:
 ```
@@ -78,7 +107,10 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 
 ### Create CheckCommand
 1. Director > Commands > External Commands > **+ Add**
-2. Name: `check_isds_replication`, Command: `$USER1$/check_isds_replication`
+2. Name: `check_isds_replication`, Command: `/usr/lib64/nagios/plugins/check_isds_replication`
+   Enter the command as an absolute path. Director prepends the plugin
+   directory to the first word of the command unless it is already absolute,
+   so `$USER1$/check_isds_replication` becomes a doubled path that cannot run.
 3. Arguments tab — add each argument below. *Type* is the Director value type,
    *Required* mirrors the CheckCommand, *Repeat key* (`repeat_key`) applies to
    array arguments, and *Skip key* shows the `set_if` boolean that gates a flag
@@ -107,12 +139,35 @@ Assumes Icinga Director >= 1.10.0 with the Kickstart wizard completed.
 
 4. **Store**, then **Deploy**.
 
+### Create Service Template
+1. Director > Services > Service Templates > **+ Add**
+2. Name: `isds-replication`, Check command: `check_isds_replication`
+3. Check interval `2m`, Retry interval `1m`, Max check attempts `3`
+4. **Run on agent**: Yes
+5. **Store**
+
 ### Create Service
 1. Director > Services > Apply Rules > **+ Add**
-2. Name: `isds-replication`, Check command: `check_isds_replication`
-3. Custom Properties: set `isds_repl_binddn`, `isds_repl_passfile`, `isds_repl_base`
+2. Name: `isds-replication`, Imports: `isds-replication` (the template above)
+3. Custom Properties: map the shared host variables onto the command's own,
+   which otherwise default to `$address$` and port 389:
+
+   | Custom property | Value |
+   |-----------------|-------|
+   | `isds_repl_host` | `$isds_ldap_host$` |
+   | `isds_repl_port` | `$isds_ldap_port$` |
+   | `isds_repl_binddn` | `$isds_ldap_binddn$` |
+   | `isds_repl_passfile` | `$isds_ldap_passfile$` |
+
+   `isds_repl_base` needs no mapping. Set it on the host, and the service picks
+   it up under the same name.
+
 4. Assign tab: `host.vars.isds` is true
 5. **Store**, then **Deploy**.
+
+On the host (or a host template), set `isds = true`, `isds_repl_base`, and the
+`isds_ldap_host`, `isds_ldap_port`, `isds_ldap_binddn` and `isds_ldap_passfile`
+custom variables.
 
 Sensitive values (the bind password): do not hardcode as a default var. Set the
 password file path per host and keep the file root/icinga-readable only. In
@@ -121,8 +176,9 @@ Director use a Data Field and a secrets-store integration.
 ## Verification
 
 ```
-/usr/lib64/nagios/plugins/check_isds_replication -H 127.0.0.1 -D cn=monitor \
-  -y /etc/icinga2/secrets/isds_repl.pw -b "dc=example,dc=com"
+sudo -u icinga /usr/lib64/nagios/plugins/check_isds_replication -H 127.0.0.1 \
+  -D "cn=icinga-monitor,cn=Users,cn=ServiceAccounts,dc=example,dc=com" \
+  -y /etc/icinga2/secrets/isds_monitor.pw -b "dc=example,dc=com"
 ```
 
 Expected (healthy server):

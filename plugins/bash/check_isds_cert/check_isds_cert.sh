@@ -25,7 +25,7 @@
 set -euo pipefail
 
 PLUGIN_NAME="check_isds_cert"
-PLUGIN_VERSION="1.1.1"
+PLUGIN_VERSION="1.1.2"
 
 # ---------- Defaults ----------
 KDB=""

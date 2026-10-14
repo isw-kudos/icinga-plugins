@@ -14,10 +14,10 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | [check_k8s_pods](plugins/python/check_k8s_pods) | Python | Alerts on Kubernetes pod health (CrashLoopBackOff, ImagePullBackOff, Pending, restart counts) | 1.2.0 | Stable |
 | [check_k8s_workloads](plugins/python/check_k8s_workloads) | Python | Alerts on Kubernetes Deployment/StatefulSet replica health and stalled rollouts | 1.0.0 | Stable |
 | [check_k8s_nodes](plugins/python/check_k8s_nodes) | Python | Alerts on Kubernetes node Ready / pressure conditions and cordoned nodes | 1.0.0 | Stable |
-| [check_isds_monitor](plugins/bash/check_isds_monitor) | Bash | Checks IBM Security Directory Server cn=monitor (worker pool, connections, throughput, cache hit ratios) | 1.1.2 | Stable |
-| [check_isds_replication](plugins/bash/check_isds_replication) | Bash | Checks IBM Security Directory Server replication agreement state and pending-change backlog | 1.1.2 | Stable |
-| [check_isds_backend](plugins/bash/check_isds_backend) | Bash | Checks IBM Security Directory Server process liveness and DB2 backend (tablespace/log usage) | 1.0.2 | Stable |
-| [check_isds_cert](plugins/bash/check_isds_cert) | Bash | Checks IBM Security Directory Server GSKit keystore (.kdb) TLS certificate expiry | 1.1.1 | Stable |
+| [check_isds_monitor](plugins/bash/check_isds_monitor) | Bash | Checks IBM Security Directory Server cn=monitor (worker pool, connections, throughput, cache hit ratios) | 1.1.3 | Stable |
+| [check_isds_replication](plugins/bash/check_isds_replication) | Bash | Checks IBM Security Directory Server replication agreement state and pending-change backlog | 1.1.3 | Stable |
+| [check_isds_backend](plugins/bash/check_isds_backend) | Bash | Checks IBM Security Directory Server process liveness and DB2 backend (tablespace/log usage) | 1.0.3 | Stable |
+| [check_isds_cert](plugins/bash/check_isds_cert) | Bash | Checks IBM Security Directory Server GSKit keystore (.kdb) TLS certificate expiry | 1.1.2 | Stable |
 | [check_http_json](plugins/bash/check_http_json) | Bash | Validates JSON fields returned by an HTTP(S) endpoint against expected values | 1.1.0 | Stable |
 | [check_acronis_disabled](plugins/bash/check_acronis_disabled) | Bash | Verifies Acronis Cyber Protect components (cyber-protect-service, cyber-desktop-service) stay disabled; WARNING-only | 1.0.1 | Stable |
 | [check_file_age](plugins/bash/check_file_age) | Bash | Age of the newest file matching a glob; treats absence as CRITICAL | 1.0.0 | Stable |
@@ -34,6 +34,7 @@ already exist — into one deployable unit.
 | Service Set | Checks | Description |
 |-------------|--------|-------------|
 | [itop](servicesets/itop) | 7 | Application-level monitoring for an iTop instance: reachability through the VIP, backup freshness and integrity, container state, synchro replica errors, background task processing, and mail delivery |
+| [isds](servicesets/isds) | 4 | IBM Security Directory Server / Verify Directory: worker-pool and connection health from cn=monitor, replication agreement state on every peer, process and DB2 backend health, and server certificate expiry |
 
 ## Compatibility
 

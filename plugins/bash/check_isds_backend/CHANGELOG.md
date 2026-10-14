@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-09
+### Added
+- `icinga2/service_template.conf`: template `isds-backend` (1m / 30s, 3 attempts),
+  used by the per-plugin `service.conf` and by the ISDS service set
+  (`servicesets/isds`).
+### Fixed
+- Director instructions: `sudo $USER1$/check_isds_backend` cannot run, because
+  Director prepends the plugin directory to `sudo`. They now use
+  `/bin/sudo /usr/lib64/nagios/plugins/check_isds_backend`.
+- `checkcommand.conf` documents the sudo command line needed with `--db2-user`.
+  Without sudo, every `db2-*` sub-check reports UNKNOWN.
+- Examples use the DB2 instance and database names validated on ISVD 10.0.3
+  (`idsldap` / `IDSLDAP`).
+
 ## [1.0.2] - 2026-06-26
 ### Fixed
 - Strip the CLP `db2 => ` / `db2 (cont.) => ` prompt that the stdin session prints

@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-09
+### Added
+- `icinga2/service_template.conf`: template `isds-replication` (2m / 1m, 3 attempts),
+  used by the per-plugin `service.conf` and by the ISDS service set
+  (`servicesets/isds`).
+### Fixed
+- The service now runs on the agent (`command_endpoint = host.name`) and connects
+  to `127.0.0.1`. Previously it ran from the master, where neither the IBM LDAP
+  client nor the bind password file exists.
+- Director instructions use an absolute command path. `$USER1$/...` makes
+  Director produce a doubled path.
+- Examples bind as a real service account, not `cn=monitor` (which is the search
+  base, and fails with LDAP rc=48).
+### Documentation
+- INSTALL.md states that the check must be applied to every server in the
+  topology, because agreement state is only published on the supplier side.
+### Changed
+- `service.conf` reads the shared `isds_ldap_host`, `isds_ldap_port`,
+  `isds_ldap_binddn` and `isds_ldap_passfile` host variables (previously
+  `isds_repl_binddn` / `isds_repl_passfile`), so one account and one password file
+  configure both LDAP checks. Hosts configured with the old names must be updated.
+
 ## [1.1.2] - 2026-06-26
 ### Added
 - Read `ibm-replicationonhold` (present on both supplier and consumer agreement
