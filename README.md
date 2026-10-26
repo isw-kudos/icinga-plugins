@@ -25,6 +25,7 @@ A collection of Icinga 2 monitoring plugins developed by ISW Kudos.
 | [check_itop_cron](plugins/bash/check_itop_cron) | Bash | Checks iTop background tasks are being processed, not just that cron is up | 1.0.0 | Stable |
 | [check_itop_replica_errors](plugins/bash/check_itop_replica_errors) | Bash | Checks iTop synchro replicas in error per data source, against a recorded baseline | 1.0.0 | Stable |
 | [check_itop_mail](plugins/bash/check_itop_mail) | Bash | Checks iTop mail leaves the host and is not going to a capture sink | 1.0.0 | Stable |
+| [check_ionos_nfs_usage](plugins/python/check_ionos_nfs_usage) | Python | Checks total share usage of an IONOS Cloud NFS cluster against its provisioned size, before it goes read-only | 1.0.0 | Stable |
 
 ## Service Sets
 
@@ -96,6 +97,9 @@ already exist — into one deployable unit.
 | check_itop_mail | >= 2.13.0 | RHEL / Rocky / AlmaLinux 8/9 | Bash 4.x |
 | check_itop_mail | >= 2.13.0 | Ubuntu 22.04/24.04 | Bash 5.x |
 | check_itop_mail | >= 2.13.0 | Debian 11/12 | Bash 5.x |
+| check_ionos_nfs_usage | >= 2.13.0 | RHEL / Rocky / AlmaLinux 8/9 | Python 3.6/3.9 |
+| check_ionos_nfs_usage | >= 2.13.0 | Ubuntu 22.04/24.04 | Python 3.10/3.12 |
+| check_ionos_nfs_usage | >= 2.13.0 | Debian 11/12 | Python 3.9/3.11 |
 
 ## Installation
 
